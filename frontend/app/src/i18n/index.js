@@ -22,6 +22,7 @@ const componentPaths = {
   activitySummaryComponent: 'components/activities/activitySummaryComponent.json',
   activityWorkoutStepsComponent: 'components/activities/activityWorkoutStepsComponent.json',
   activitiesTableComponent: 'components/activities/activitiesTableComponent.json',
+  activityCompare: 'components/activities/activityCompare.json',
   // Followers component
   followersListComponent: 'components/followers/followersListComponent.json',
   // Gears component
