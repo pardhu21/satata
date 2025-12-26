@@ -115,7 +115,7 @@
           (activityActivityStreams && activityActivityStreams.length > 0))
       "
     >
-      <ActivityBellowMPillsComponent
+      <ActivityCompareBellowMPillsComponent
         :activity="activity"
         :activityActivityLaps="activityActivityLaps"
         :activityActivityWorkoutSteps="activityActivityWorkoutSteps"
@@ -123,6 +123,12 @@
         :units="units"
         :activityActivityExerciseTitles="activityActivityExerciseTitles"
         :activityActivitySets="activityActivitySets"
+        :compareActivity="comparedActivity"
+        :compareActivityActivityLaps="comparedActivityActivityLaps"
+        :compareActivityActivityWorkoutSteps="comparedActivityActivityWorkoutSteps"
+        :compareActivityActivityStreams="comparedActivityActivityStreams"
+        :compareActivityActivityExerciseTitles="comparedActivityActivityExerciseTitles"
+        :compareActivityActivitySets="comparedActivityActivitySets"
       />
     </div>
 
@@ -144,10 +150,9 @@ import { push } from 'notivue'
 import ActivityCompareSummaryComponent from '@/components/Activities/ActivityCompareSummaryComponent.vue'
 import ActivityMapCompareComponent from '@/components/Activities/ActivityMapCompareComponent.vue'
 import ActivityMandAbovePillsComponent from '@/components/Activities/ActivityMandAbovePillsComponent.vue'
-import ActivityBellowMPillsComponent from '@/components/Activities/ActivityBellowMPillsComponent.vue'
+import ActivityCompareBellowMPillsComponent from '@/components/Activities/ActivityCompareBellowMPillsComponent.vue'
 import LoadingComponent from '@/components/GeneralComponents/LoadingComponent.vue'
 import BackButtonComponent from '@/components/GeneralComponents/BackButtonComponent.vue'
-import ActivityCompareSelectionComponent from '@/components/Activities/ActivityCompareSelectionComponent.vue'
 import AlertComponent from '@/components/GeneralComponents/AlertComponent.vue'
 // Importing the services
 import { activities } from '@/services/activitiesService'
