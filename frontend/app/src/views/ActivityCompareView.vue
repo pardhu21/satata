@@ -90,14 +90,20 @@
           (activityActivityStreams && activityActivityStreams.length > 0))
       "
     >
-      <ActivityMandAbovePillsComponent
+      <ActivityMandAbovePillsCompareComponent
         :activity="activity"
+        :comparedActivity="comparedActivity"
         :activityActivityLaps="activityActivityLaps"
+        :comparedActivityActivityLaps="comparedActivityActivityLaps"
         :activityActivityWorkoutSteps="activityActivityWorkoutSteps"
+        :comparedActivityActivityWorkoutSteps="comparedActivityActivityWorkoutSteps"
         :activityActivityStreams="activityActivityStreams"
+        :comparedActivityActivityStreams="comparedActivityActivityStreams"
         :units="units"
         :activityActivityExerciseTitles="activityActivityExerciseTitles"
+        :comparedActivityActivityExerciseTitles="comparedActivityActivityExerciseTitles"
         :activityActivitySets="activityActivitySets"
+        :comparedActivityActivitySets="comparedActivityActivitySets"
       />
     </div>
 
@@ -149,7 +155,7 @@ import { push } from 'notivue'
 // Importing the components
 import ActivityCompareSummaryComponent from '@/components/Activities/ActivityCompareSummaryComponent.vue'
 import ActivityMapCompareComponent from '@/components/Activities/ActivityMapCompareComponent.vue'
-import ActivityMandAbovePillsComponent from '@/components/Activities/ActivityMandAbovePillsComponent.vue'
+import ActivityMandAbovePillsCompareComponent from '@/components/Activities/ActivityMandAbovePillsCompareComponent.vue'
 import ActivityCompareBellowMPillsComponent from '@/components/Activities/ActivityCompareBellowMPillsComponent.vue'
 import LoadingComponent from '@/components/GeneralComponents/LoadingComponent.vue'
 import BackButtonComponent from '@/components/GeneralComponents/BackButtonComponent.vue'
