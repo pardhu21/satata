@@ -53,8 +53,9 @@ export const useActivities = () => {
     pageNumber.value = page
   }
 
-  async function updateActivities() {
+  async function updateActivities(activityType) {
     try {
+      selectedType.value = activityType || selectedType.value
       isLoading.value = true
       await fetchActivities()
     } catch (error) {
