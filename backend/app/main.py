@@ -26,7 +26,14 @@ import password_reset_tokens.utils as password_reset_tokens_utils
 
 import sign_up_tokens.utils as sign_up_tokens_utils
 
+import auth.oauth_state.utils as oauth_state_utils
+import auth.idp_link_tokens.utils as idp_link_token_utils
+
+import server_settings.utils as server_settings_utils
+import server_settings.schema as server_settings_schema
+
 from core.routes import router as api_router
+from core.database import SessionLocal
 
 
 async def startup_event():
@@ -41,7 +48,7 @@ async def startup_event():
     command.upgrade(alembic_cfg, "head")
 
     # Migration check
-    core_migrations.check_migrations()
+    await core_migrations.check_migrations()
 
     # Create a scheduler to run background jobs
     core_scheduler.start_scheduler()
@@ -77,6 +84,41 @@ async def startup_event():
     )
     sign_up_tokens_utils.delete_invalid_tokens_from_db()
 
+    # Delete expired OAuth states
+    core_logger.print_to_log_and_console(
+        "Deleting expired OAuth states from the database"
+    )
+    oauth_state_utils.delete_expired_oauth_states_from_db()
+
+    # Delete expired IdP link tokens
+    core_logger.print_to_log_and_console(
+        "Deleting expired IdP link tokens from the database"
+    )
+    idp_link_token_utils.delete_idp_link_expired_tokens_from_db()
+
+    # Initialize allowed tile domains for CSP
+    core_logger.print_to_log_and_console(
+        "Initializing allowed tile domains for Content Security Policy"
+    )
+    with SessionLocal() as db:
+        try:
+            app.state.allowed_tile_domains = (
+                server_settings_utils.get_allowed_tile_domains(db)
+            )
+            core_logger.print_to_log_and_console(
+                f"Allowed tile domains: {app.state.allowed_tile_domains}"
+            )
+        except Exception as err:
+            core_logger.print_to_log(
+                f"Error initializing tile domains, using defaults: {err}",
+                "error",
+                exc=err,
+            )
+            # Fallback to built-in providers
+            app.state.allowed_tile_domains = (
+                server_settings_schema.DEFAULT_ALLOWED_TILE_DOMAINS.copy()
+            )
+
 
 def shutdown_event():
     # Log the shutdown event
@@ -104,11 +146,13 @@ def create_app() -> FastAPI:
     # Add session middleware for OAuth state management
     fastapi_app.add_middleware(
         SessionMiddleware,
-        secret_key=os.environ.get("SECRET_KEY"),
+        secret_key=core_config.read_secret("SECRET_KEY"),
         session_cookie="endurain_session",
         max_age=3600,  # 1 hour session timeout
         same_site="lax",
-        https_only=(core_config.ENVIRONMENT == "production"),
+        https_only=(
+            core_config.ENVIRONMENT == "production" or core_config.ENVIRONMENT == "demo"
+        ),
     )
 
     # Add CORS middleware to allow requests from the frontend
@@ -130,6 +174,10 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
+    # Add security headers middleware (before CSRF for proper header ordering)
+    fastapi_app.add_middleware(core_middleware.SecurityHeadersMiddleware)
+
+    # Add CSRF protection middleware
     fastapi_app.add_middleware(core_middleware.CSRFMiddleware)
 
     # Add rate limiting

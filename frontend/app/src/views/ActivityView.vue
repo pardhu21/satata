@@ -278,7 +278,11 @@ import {
   activityTypeIsWalking,
   activityTypeIsSwimming,
   activityTypeIsRacquet,
-  activityTypeIsWindsurf
+  activityTypeIsWindsurf,
+  activityTypeIsSnowSkiing,
+  activityTypeIsSnowboarding,
+  activityTypeIsSurf,
+  activityTypeIsStandUpPaddling
 } from '@/utils/activityUtils'
 
 const { t } = useI18n()
@@ -295,7 +299,7 @@ const activityActivityStreams = ref([])
 const activityActivityLaps = ref([])
 const activityActivityWorkoutSteps = ref([])
 const activityActivityMedia = ref([])
-const units = ref(1)
+const units = ref('metric')
 const activityActivityExerciseTitles = ref([])
 const activityActivitySets = ref([])
 const alertPrivacyMessage = ref(null)
@@ -376,16 +380,22 @@ function removeMediaFromActivity(mediaId) {
 }
 
 async function getGearsByActivityType() {
-  if (activityTypeIsRunning(activity.value) || activityTypeIsWalking(activity.value)) {
-    gearsByType.value = await gears.getGearFromType(2)
-  } else if (activityTypeIsCycling(activity.value)) {
+  if (activityTypeIsCycling(activity.value)) {
     gearsByType.value = await gears.getGearFromType(1)
+  } else if (activityTypeIsRunning(activity.value) || activityTypeIsWalking(activity.value)) {
+    gearsByType.value = await gears.getGearFromType(2)
   } else if (activityTypeIsSwimming(activity.value)) {
     gearsByType.value = await gears.getGearFromType(3)
   } else if (activityTypeIsRacquet(activity.value)) {
     gearsByType.value = await gears.getGearFromType(4)
+  } else if (activityTypeIsSnowSkiing(activity.value)) {
+    gearsByType.value = await gears.getGearFromType(5)
+  } else if (activityTypeIsSnowboarding(activity.value)) {
+    gearsByType.value = await gears.getGearFromType(6)
   } else if (activityTypeIsWindsurf(activity.value)) {
     gearsByType.value = await gears.getGearFromType(7)
+  } else if (activityTypeIsStandUpPaddling(activity.value) || activityTypeIsSurf(activity.value)) {
+    gearsByType.value = await gears.getGearFromType(8)
   } else {
     gearsByType.value = []
   }

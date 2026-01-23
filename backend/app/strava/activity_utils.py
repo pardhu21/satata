@@ -17,20 +17,21 @@ import activities.activity_laps.crud as activity_laps_crud
 import activities.activity_streams.schema as activity_streams_schema
 import activities.activity_streams.crud as activity_streams_crud
 
-import users.user_integrations.schema as user_integrations_schema
+import users.users_integrations.models as user_integrations_models
 
-import users.user_default_gear.utils as user_default_gear_utils
+import users.users_default_gear.utils as user_default_gear_utils
 
-import users.user_privacy_settings.crud as users_privacy_settings_crud
-import users.user_privacy_settings.schema as users_privacy_settings_schema
+import users.users_privacy_settings.crud as users_privacy_settings_crud
+import users.users_privacy_settings.models as users_privacy_settings_models
+import users.users_privacy_settings.utils as users_privacy_settings_utils
 
-import users.user.crud as users_crud
+import users.users.crud as users_crud
 
 import gears.gear.crud as gears_crud
 
 import strava.utils as strava_utils
 
-import websocket.schema as websocket_schema
+import websocket.manager as websocket_manager
 
 from core.database import SessionLocal
 
@@ -40,8 +41,8 @@ async def fetch_and_process_activities(
     start_date: datetime,
     end_date: datetime,
     user_id: int,
-    user_integrations: user_integrations_schema.UsersIntegrations,
-    websocket_manager: websocket_schema.WebSocketManager,
+    user_integrations: user_integrations_models.UsersIntegrations,
+    ws_manager: websocket_manager.WebSocketManager,
     db: Session,
     is_startup: bool = False,
 ) -> int:
@@ -118,7 +119,7 @@ async def fetch_and_process_activities(
                 user_privacy_settings,
                 strava_client,
                 user_integrations,
-                websocket_manager,
+                ws_manager,
                 db,
             )
         )
@@ -130,9 +131,9 @@ async def fetch_and_process_activities(
 def parse_activity(
     activity,
     user_id: int,
-    user_privacy_settings: users_privacy_settings_schema.UsersPrivacySettings,
+    user_privacy_settings: users_privacy_settings_models.UsersPrivacySettings,
     strava_client: Client,
-    user_integrations: user_integrations_schema.UsersIntegrations,
+    user_integrations: user_integrations_models.UsersIntegrations,
     db: Session,
 ) -> dict:
     # Create an instance of TimezoneFinder
@@ -329,10 +330,8 @@ def parse_activity(
         gear_id=gear_id,
         strava_gear_id=detailedActivity.gear_id,
         strava_activity_id=int(activity.id),
-        visibility=(
+        visibility=users_privacy_settings_utils.visibility_to_int(
             user_privacy_settings.default_activity_visibility
-            if user_privacy_settings.default_activity_visibility is not None
-            else 0
         ),
         hide_start_time=user_privacy_settings.hide_activity_start_time or False,
         hide_location=user_privacy_settings.hide_activity_location or False,
@@ -369,13 +368,11 @@ async def save_activity_streams_laps(
     activity: activities_schema.Activity,
     stream_data: list,
     laps: dict,
-    websocket_manager: websocket_schema.WebSocketManager,
+    ws_manager: websocket_manager.WebSocketManager,
     db: Session,
 ) -> activities_schema.Activity:
     # Create the activity and get the ID
-    created_activity = await activities_crud.create_activity(
-        activity, websocket_manager, db
-    )
+    created_activity = await activities_crud.create_activity(activity, ws_manager, db)
 
     if stream_data is not None:
         # Create the empty array of activity streams
@@ -408,10 +405,10 @@ async def save_activity_streams_laps(
 async def process_activity(
     activity,
     user_id: int,
-    user_privacy_settings: users_privacy_settings_schema.UsersPrivacySettings,
+    user_privacy_settings: users_privacy_settings_models.UsersPrivacySettings,
     strava_client: Client,
-    user_integrations: user_integrations_schema.UsersIntegrations,
-    websocket_manager: websocket_schema.WebSocketManager,
+    user_integrations: user_integrations_models.UsersIntegrations,
+    ws_manager: websocket_manager.WebSocketManager,
     db: Session,
 ):
     # Get the activity by Strava ID from the user
@@ -441,7 +438,7 @@ async def process_activity(
         parsed_activity["activity_to_store"],
         parsed_activity["stream_data"],
         parsed_activity["laps"],
-        websocket_manager,
+        ws_manager,
         db,
     )
 
@@ -709,7 +706,7 @@ async def retrieve_strava_users_activities_for_days(
             if users:
                 for user in users:
                     try:
-                        await get_user_garminconnect_activities_by_dates(
+                        await get_user_strava_activities_by_dates(
                             calculated_start_date,
                             calculated_end_date,
                             user.id,
@@ -765,11 +762,11 @@ async def retrieve_strava_users_activities_for_days(
                 ) from err
 
 
-async def get_user_garminconnect_activities_by_dates(
+async def get_user_strava_activities_by_dates(
     start_date: datetime,
     end_date: datetime,
     user_id: int,
-    websocket_manager: websocket_schema.WebSocketManager = None,
+    ws_manager: websocket_manager.WebSocketManager | None = None,
     db: Session = None,
     is_startup: bool = False,
 ) -> list[activities_schema.Activity] | None:
@@ -779,9 +776,9 @@ async def get_user_garminconnect_activities_by_dates(
         db = SessionLocal()
         close_session = True
 
-    if websocket_manager is None:
+    if ws_manager is None:
         # Get the websocket manager instance
-        websocket_manager = websocket_schema.get_websocket_manager()
+        ws_manager = websocket_manager.get_websocket_manager()
 
     try:
         # Get the user integrations by user ID
@@ -809,7 +806,7 @@ async def get_user_garminconnect_activities_by_dates(
                 end_date,
                 user_id,
                 user_integrations,
-                websocket_manager,
+                ws_manager,
                 db,
                 is_startup,
             )

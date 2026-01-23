@@ -1,3 +1,16 @@
+"""Profile data export service for ZIP archive generation.
+
+This module provides the ExportService class for exporting
+user profile data including activities, health records, gear,
+and settings to a downloadable ZIP archive with streaming.
+
+Key Features:
+- Batched data collection for memory efficiency
+- Streaming ZIP generation
+- Automatic performance tier detection
+- Memory and timeout monitoring
+"""
+
 import os
 import tempfile
 import zipfile
@@ -26,14 +39,14 @@ import activities.activity_media.crud as activity_media_crud
 import activities.activity_exercise_titles.crud as activity_exercise_titles_crud
 import gears.gear.crud as gear_crud
 import gears.gear_components.crud as gear_components_crud
-import health_weight.crud as health_weight_crud
-import health_targets.crud as health_targets_crud
+import health.health_weight.crud as health_weight_crud
+import health.health_targets.crud as health_targets_crud
 import notifications.crud as notifications_crud
-import users.user_default_gear.crud as user_default_gear_crud
-import users.user_goals.crud as user_goals_crud
-import users.user_identity_providers.crud as user_identity_providers_crud
-import users.user_integrations.crud as user_integrations_crud
-import users.user_privacy_settings.crud as users_privacy_settings_crud
+import users.users_default_gear.crud as user_default_gear_crud
+import users.users_goals.crud as user_goals_crud
+import users.users_identity_providers.crud as user_identity_providers_crud
+import users.users_integrations.crud as user_integrations_crud
+import users.users_privacy_settings.crud as users_privacy_settings_crud
 
 
 class ExportPerformanceConfig(profile_utils.BasePerformanceConfig):

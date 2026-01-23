@@ -6,6 +6,10 @@ from sqlalchemy import pool
 from alembic import context
 
 
+import auth.identity_providers.models
+import auth.mfa_backup_codes.models
+import auth.oauth_state.models
+import auth.idp_link_tokens.models
 import activities.activity.models
 import activities.activity_exercise_titles.models
 import activities.activity_laps.models
@@ -16,23 +20,23 @@ import activities.activity_workout_steps.models
 import followers.models
 import gears.gear.models
 import gears.gear_components.models
-import health_sleep.models
-import health_steps.models
-import health_targets.models
-import health_weight.models
-import auth.identity_providers.models
+import health.health_sleep.models
+import health.health_steps.models
+import health.health_targets.models
+import health.health_weight.models
 import migrations.models
 import notifications.models
 import password_reset_tokens.models
 import sign_up_tokens.models
 import server_settings.models
-import session.models
-import users.user.models
-import users.user_goals.models
-import users.user_default_gear.models
-import users.user_identity_providers.models
-import users.user_integrations.models
-import users.user_privacy_settings.models
+import users.users_sessions.models
+import users.users_sessions.rotated_refresh_tokens.models
+import users.users.models
+import users.users_goals.models
+import users.users_default_gear.models
+import users.users_identity_providers.models
+import users.users_integrations.models
+import users.users_privacy_settings.models
 
 # import Base and engine from database file
 from core.database import Base, engine

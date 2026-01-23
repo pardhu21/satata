@@ -1,9 +1,18 @@
 from datetime import datetime, timezone
+from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi import HTTPException
+from joserfc.errors import (
+    InsecureClaimError,
+    MissingClaimError,
+    InvalidTokenError,
+    InvalidPayloadError,
+)
 
 import auth.token_manager as auth_token_manager
+
+from users.users.schema import UsersRead, UserAccessType
 
 
 class TestTokenManagerSecurity:
@@ -441,3 +450,171 @@ class TestTokenManagerSecurity:
         assert (
             exp_time.tzinfo == timezone.utc
         ), "Expiration time should be in UTC timezone"
+
+    def test_get_token_claim_generic_exception(self, token_manager, sample_user_read):
+        """
+        Test generic exception handling in get_token_claim.
+        """
+        # Create a token
+        _, token = token_manager.create_token(
+            "session-id", sample_user_read, auth_token_manager.TokenType.ACCESS
+        )
+
+        # Mock decode_token to raise a generic exception
+        with patch.object(
+            token_manager, "decode_token", side_effect=RuntimeError("Test error")
+        ):
+            with pytest.raises(HTTPException) as exc_info:
+                token_manager.get_token_claim(token, "sub")
+            assert exc_info.value.status_code == 401
+            assert "Unable to retrieve claim" in exc_info.value.detail
+
+    def test_decode_token_invalid_payload_error(self, token_manager):
+        """
+        Test InvalidPayloadError handling in decode_token.
+        """
+        # Create an invalid token that will trigger InvalidPayloadError
+        invalid_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.e30.invalid"
+
+        with pytest.raises(HTTPException) as exc_info:
+            token_manager.decode_token(invalid_token)
+        assert exc_info.value.status_code == 401
+
+    def test_validate_token_expiration_insecure_claim(
+        self, token_manager, sample_user_read
+    ):
+        """
+        Test InsecureClaimError handling in validate_token_expiration.
+        """
+        _, token = token_manager.create_token(
+            "session-id", sample_user_read, auth_token_manager.TokenType.ACCESS
+        )
+
+        # Mock the validation to raise InsecureClaimError
+        with patch("auth.token_manager.jwt.JWTClaimsRegistry") as mock_registry:
+            mock_instance = MagicMock()
+            mock_instance.validate.side_effect = InsecureClaimError("Insecure")
+            mock_registry.return_value = mock_instance
+
+            # Should raise HTTPException with 401 status
+            with pytest.raises(HTTPException) as exc_info:
+                token_manager.validate_token_expiration(token)
+            assert exc_info.value.status_code == 401
+            assert "insecure claims" in exc_info.value.detail.lower()
+
+    def test_validate_token_expiration_generic_exception(
+        self, token_manager, sample_user_read
+    ):
+        """
+        Test generic exception handling in validate_token_expiration.
+        """
+        _, token = token_manager.create_token(
+            "session-id", sample_user_read, auth_token_manager.TokenType.ACCESS
+        )
+
+        with patch.object(
+            token_manager, "decode_token", side_effect=RuntimeError("Test error")
+        ):
+            with pytest.raises(HTTPException) as exc_info:
+                token_manager.validate_token_expiration(token)
+            assert exc_info.value.status_code == 401
+            assert "expired or invalid" in exc_info.value.detail
+
+    def test_validate_token_expiration_missing_claim_error(
+        self, token_manager, sample_user_read
+    ):
+        """
+        Test MissingClaimError handling in validate_token_expiration.
+        """
+        _, token = token_manager.create_token(
+            "session-id", sample_user_read, auth_token_manager.TokenType.ACCESS
+        )
+
+        # Mock to raise MissingClaimError
+        with patch("auth.token_manager.jwt.JWTClaimsRegistry") as mock_registry:
+            mock_instance = MagicMock()
+            mock_instance.validate.side_effect = MissingClaimError("sub")
+            mock_registry.return_value = mock_instance
+
+            with pytest.raises(HTTPException) as exc_info:
+                token_manager.validate_token_expiration(token)
+            assert exc_info.value.status_code == 401
+            assert "missing required claims" in exc_info.value.detail
+
+    def test_validate_token_expiration_invalid_token_error(
+        self, token_manager, sample_user_read
+    ):
+        """
+        Test InvalidTokenError handling in validate_token_expiration.
+
+        Note: InvalidClaimError is a subclass of InvalidTokenError,
+        so this test also covers the InvalidClaimError path since
+        both raise the same HTTPException for "not valid yet".
+        """
+        _, token = token_manager.create_token(
+            "session-id", sample_user_read, auth_token_manager.TokenType.ACCESS
+        )
+
+        # Mock to raise InvalidTokenError
+        with patch("auth.token_manager.jwt.JWTClaimsRegistry") as mock_registry:
+            mock_instance = MagicMock()
+            mock_instance.validate.side_effect = InvalidTokenError("not valid yet")
+            mock_registry.return_value = mock_instance
+
+            with pytest.raises(HTTPException) as exc_info:
+                token_manager.validate_token_expiration(token)
+            assert exc_info.value.status_code == 401
+            assert "not valid yet" in exc_info.value.detail
+
+    def test_decode_token_invalid_payload_error_mocked(self, token_manager):
+        """
+        Test that decode_token handles InvalidPayloadError correctly.
+        """
+
+        with patch(
+            "auth.token_manager.jwt.decode",
+            side_effect=InvalidPayloadError("Invalid payload"),
+        ):
+            with pytest.raises(HTTPException) as exc_info:
+                token_manager.decode_token("invalid_token")
+            assert exc_info.value.status_code == 401
+            assert "Invalid token payload" in exc_info.value.detail
+
+    def test_decode_token_generic_exception(self, token_manager):
+        """
+        Test that decode_token handles generic exceptions correctly.
+        """
+        with patch(
+            "auth.token_manager.jwt.decode",
+            side_effect=RuntimeError("Unexpected error"),
+        ):
+            with pytest.raises(HTTPException) as exc_info:
+                token_manager.decode_token("invalid_token")
+            assert exc_info.value.status_code == 401
+            assert "Unable to decode token" in exc_info.value.detail
+
+    def test_create_token_regular_user_gets_regular_scope(self, token_manager):
+        """
+        Test that regular users get appropriate scope in their tokens.
+        Note: Backend now grants all users full scope regardless of access_type.
+        """
+        regular_user = UsersRead(
+            id=2,
+            name="Regular User",
+            username="regular",
+            email="regular@test.com",
+            access_type=UserAccessType.REGULAR.value,
+            active=True,
+        )
+
+        _, token = token_manager.create_token(
+            "session-id", regular_user, auth_token_manager.TokenType.ACCESS
+        )
+
+        scope = token_manager.get_token_claim(token, "scope")
+
+        # Verify token has scopes (backend grants full scope to all users)
+        assert "profile" in scope
+        assert "users:read" in scope
+        assert isinstance(scope, (list, tuple))
+        assert len(scope) > 0

@@ -1,69 +1,159 @@
 # Handling authentication
 
-Endurain supports integration with other apps through a comprehensive authentication system that includes standard username/password authentication, Multi-Factor Authentication (MFA), OAuth/SSO integration, and JWT-based session management.
+Endurain supports integration with other apps through a comprehensive OAuth 2.1 compliant authentication system that includes standard username/password authentication, Multi-Factor Authentication (MFA), OAuth/SSO integration, and JWT-based session management with refresh token rotation.
 
 ## API Requirements
-- **Add a header:** Every request must include an `X-Client-Type` header with either `web` or `mobile` as the value. Requests with other values will receive a `403` error.
-- **Authorization:** Every request must include an `Authorization: Bearer <access token>` header with a valid (new or refreshed) access token.
+
+- **Client Type Header:** Every request must include an `X-Client-Type` header with either `web` or `mobile` as the value. Requests with other values will receive a `403` error.
+- **Authorization:** Every request must include an `Authorization: Bearer <access token>` header with a valid access token.
+- **CSRF Protection (Web Only):** State-changing requests (`POST`, `PUT`, `DELETE`, `PATCH`) from web clients must include an `X-CSRF-Token` header.
 
 ## Token Handling
 
 ### Token Lifecycle
-- The backend generates an `access_token` valid for 15 minutes (default) and a `refresh_token` valid for 7 days (default). This follows the best practice of short-lived and long-lived tokens for authentication sessions.
-- The `access_token` is used for authorization; The `refresh_token` is used to refresh the `access_token`.
+
+- The backend generates an `access_token` valid for 15 minutes (default) and a `refresh_token` valid for 7 days (default).
+- The `access_token` is used for authorization; the `refresh_token` is used to obtain new access tokens.
+- A `csrf_token` is generated for CSRF protection on state-changing requests.
 - Token expiration times can be customized via environment variables (see Configuration section below).
 
-### Client-Specific Token Delivery
-- **For web apps**: The backend sends access/refresh tokens as HTTP-only cookies:
-  - `endurain_access_token` (HttpOnly, Secure in production)
-  - `endurain_refresh_token` (HttpOnly, Secure in production)
-  - `endurain_csrf_token` (HttpOnly, for CSRF protection)
-- **For mobile apps**: Tokens are included in the response body as JSON.
+### OAuth 2.1 Token Storage Model (Hybrid Approach)
+
+Endurain implements an OAuth 2.1 compliant hybrid token storage model that provides both security and usability:
+
+| Token | Storage Location | Lifetime | Security Purpose |
+|-------|------------------|----------|------------------|
+| **Access Token** | In-memory (JavaScript) | 15 minutes | Short-lived, XSS-resistant (not persisted) |
+| **Refresh Token** | httpOnly cookie | 7 days | CSRF-protected, auto-sent by browser |
+| **CSRF Token** | In-memory (JavaScript) | Session | Prevents CSRF attacks on state-changing requests |
+
+**Security Properties:**
+
+- **XSS Protection:** Access tokens stored in memory cannot be exfiltrated via XSS attacks
+- **CSRF Protection:** Refresh token in httpOnly cookie + CSRF token header prevents CSRF attacks
+- **Session Persistence:** Page reload triggers `/auth/refresh` with httpOnly cookie to restore tokens
+- **Multi-tab Support:** httpOnly cookie shared across browser tabs
+
+### Token Delivery by Client Type
+
+- **For web apps:** 
+    - Access token and CSRF token returned in JSON response body (stored in-memory)
+    - Refresh token set as httpOnly cookie (`endurain_refresh_token`)
+    - On page reload, call `/auth/refresh` to restore in-memory tokens
+
+- **For mobile apps:** 
+    - All tokens (access, refresh) returned in JSON response body
+    - Store tokens in secure platform storage (iOS Keychain, Android EncryptedSharedPreferences)
 
 ## Authentication Flows
 
-### Standard Login Flow
-1. Client sends credentials to `/token` endpoint
-2. Backend validates credentials
-3. If MFA is enabled, backend requests MFA code
+### Standard Login Flow (Username/Password)
+
+1. Client sends credentials to `/auth/login` endpoint
+2. Backend validates credentials and checks for account lockout
+3. If MFA is enabled, backend returns MFA-required response
 4. If MFA is disabled or verified, backend generates tokens
-5. Tokens are delivered based on client type (cookies for web, JSON for mobile)
+5. Tokens are delivered based on client type:
+    - **Web:** Access token + CSRF token in response body, refresh token as httpOnly cookie
+    - **Mobile:** All tokens in response body (CSRF not included, not needed for mobile logic)
+    - **Mobile with PKCE:** Session ID for secure token exchange (see [Mobile Password Login with PKCE](#mobile-password-login-with-pkce) below)
 
 ### OAuth/SSO Flow
+
 1. Client requests list of enabled providers from `/public/idp`
-2. Client initiates OAuth by redirecting to `/public/idp/login/{idp_slug}`
+2. Client initiates OAuth by redirecting to `/public/idp/login/{idp_slug}` with PKCE challenge
 3. User authenticates with the OAuth provider
 4. Provider redirects back to `/public/idp/callback/{idp_slug}` with authorization code
 5. Backend exchanges code for provider tokens and user info
-6. Backend creates or links user account and generates session tokens
-7. User is redirected to the app with active session
+6. Backend creates or links user account and generates session tokens based on client type:
+    - **Web clients:** Redirected to app with tokens set automatically
+    - **Mobile clients:** Exchange session for tokens via PKCE token exchange endpoint `/public/idp/session/{session_id}/tokens`
 
 ### Token Refresh Flow
-1. When access token expires, client sends refresh token to `/refresh`
-2. Backend validates refresh token and session
-3. New access token is generated and returned
-4. Refresh token may be rotated based on configuration
+
+The token refresh flow implements OAuth 2.1 compliant refresh token rotation:
+
+1. When access token expires, client calls `POST /auth/refresh`:
+    - **Web clients:** Include `X-CSRF-Token` header with current CSRF token
+    - **Mobile clients:** Include refresh token in request
+2. Backend validates refresh token and session, checks for token reuse
+    - **If token reuse detected:** Entire token family is invalidated (security breach response)
+3. New tokens are generated (access, refresh, CSRF) with refresh token rotation
+4. Old refresh token is stored for reuse detection (grace period: 30 seconds)
+5. Response includes new tokens; web clients receive new httpOnly cookie
+
+**Token Refresh Request (Web):**
+
+```http
+POST /api/v1/auth/refresh
+X-Client-Type: web
+X-CSRF-Token: {current_csrf_token}
+Cookie: endurain_refresh_token={refresh_token}
+```
+
+**Token Refresh Response:**
+
+```json
+{
+  "session_id": "uuid",
+  "access_token": "eyJ...",
+  "csrf_token": "new_csrf_token",
+  "token_type": "bearer",
+  "expires_in": 1734567890
+}
+```
+
+### Refresh Token Rotation & Reuse Detection
+
+Endurain implements automatic refresh token rotation with reuse detection to prevent token theft:
+
+| Security Feature | Description |
+|------------------|-------------|
+| **Automatic Rotation** | New refresh token issued on every `/auth/refresh` call |
+| **Token Family Tracking** | All tokens in a session share a `token_family_id` |
+| **Reuse Detection** | Old tokens are stored and monitored for reuse |
+| **Grace Period** | 30-second window allows for network retry scenarios |
+| **Family Invalidation** | If reuse detected, ALL tokens in family are invalidated |
+| **Rotation Count** | Tracks number of rotations for audit purposes |
 
 ## API Endpoints 
+
 The API is reachable under `/api/v1`. Below are the authentication-related endpoints. Complete API documentation is available on the backend docs (`http://localhost:98/api/v1/docs` or `http://ip_address:98/api/v1/docs` or `https://domain/api/v1/docs`):
 
-### Core Authentication Endpoints
+### Core Authentication Endpoints (Web)
 
 | What | Url | Expected Information | Rate Limit |
 | ---- | --- | -------------------- | ---------- |
-| **Authorize** | `/token` |  `FORM` with the fields `username` and `password`. This will be sent in clear text, use of HTTPS is highly recommended | 5 requests/min per IP |
-| **Refresh Token** | `/refresh` | header `Authorization Bearer: <Refresh Token>`  | - |
-| **Verify MFA** | `/mfa/verify` | JSON `{'username': <username>, 'mfa_code': '123456'}` | - |
-| **Logout** | `/logout` | header `Authorization Bearer: <Access Token>` | - |
+| **Authorize** | `/auth/login` | `FORM` with fields: `username`, `password`. HTTPS highly recommended | 3 requests/min per IP |
+| **Refresh Token** | `/auth/refresh` | Cookie: `endurain_refresh_token`, Header: `X-CSRF-Token` (optional because of bootstrap logic) | - |
+| **Verify MFA** | `/auth/mfa/verify` | JSON `{'username': <username>, 'mfa_code': '123456'}` | 3 requests/min per IP |
+| **Logout** | `/auth/logout` | Cookie: `endurain_refresh_token`, Header: `X-CSRF-Token` | - |
+
+### Core Authentication Endpoints (Mobile)
+
+| What | Url | Expected Information | Rate Limit |
+| ---- | --- | -------------------- | ---------- |
+| **Authorize** | `/auth/login` | `FORM` with fields: `username`, `password`. Optional query params: `code_challenge`, `code_challenge_method` (mobile PKCE). HTTPS highly recommended | 3 requests/min per IP |
+| **Refresh Token** | `/auth/refresh` | Header: `Authorization: Bearer <Refresh Token>` | - |
+| **Verify MFA** | `/auth/mfa/verify` | JSON body: `{'username': <username>, 'mfa_code': '123456'}`. Optional query params: `code_challenge`, `code_challenge_method` (mobile PKCE) | 3 requests/min per IP |
+| **Logout** | `/auth/logout` | Header: `Authorization: Bearer <Refresh Token>` | - |
 
 ### OAuth/SSO Endpoints
 
 | What | Url | Expected Information | Rate Limit |
 | ---- | --- | -------------------- | ---------- |
 | **Get Enabled Providers** | `/public/idp` | None (public endpoint) | - |
-| **Initiate OAuth Login** | `/public/idp/login/{idp_slug}` | Query param: `redirect=<path>` (optional) | 10 requests/min per IP |
-| **OAuth Callback** | `/public/idp/callback/{idp_slug}` | Query params: `code=<code>`, `state=<state>` | Configurable |
+| **Initiate OAuth Login** | `/public/idp/login/{idp_slug}` | Query params: `redirect`, `code_challenge`, `code_challenge_method` | 10 requests/min per IP |
+| **OAuth Callback** | `/public/idp/callback/{idp_slug}` | Query params: `code=<code>`, `state=<state>` | 10 requests/min per IP |
+| **Token Exchange (PKCE)** | `/session/{session_id}/tokens` | JSON: `{"code_verifier": "<verifier>"}` (mobile PKCE: password or SSO) | 10 requests/min per IP |
 | **Link IdP to Account** | `/profile/idp/{idp_id}/link` | Requires authenticated session | 10 requests/min per IP |
+
+### Session Management Endpoints
+
+| What | Url | Expected Information |
+| ---- | --- | -------------------- |
+| **Get User Sessions** | `/sessions/user/{user_id}` | Header: `Authorization: Bearer <Access Token>` |
+| **Delete Session** | `/sessions/{session_id}/user/{user_id}` | Header: `Authorization: Bearer <Access Token>` |
 
 ### Example Resource Endpoints
 
@@ -72,16 +162,33 @@ The API is reachable under `/api/v1`. Below are the authentication-related endpo
 | **Activity Upload** | `/activities/create/upload` | .gpx, .tcx, .gz or .fit file |
 | **Set Weight** | `/health/weight` | JSON `{'weight': <number>, 'created_at': 'yyyy-MM-dd'}` |
 
+## Progressive Account Lockout
+
+Endurain implements progressive brute-force protection to prevent credential stuffing attacks:
+
+| Failed Attempts | Lockout Duration |
+|-----------------|------------------|
+| 5 failures | 5 minutes |
+| 10 failures | 30 minutes |
+| 20 failures | 24 hours |
+
+**Features:**
+
+- Per-username tracking prevents targeted attacks
+- Lockout persists through MFA flow (prevents bypass)
+- Counter resets on successful authentication
+- Graceful error messages with remaining lockout time
+
 ## MFA Authentication Flow
 
 When Multi-Factor Authentication (MFA) is enabled for a user, the authentication process requires two steps:
 
 ### Step 1: Initial Login Request
-Make a standard login request to `/token`:
+Make a standard login request to `/auth/login`:
 
 **Request:**
 ```http
-POST /api/v1/token
+POST /api/v1/auth/login
 Content-Type: application/x-www-form-urlencoded
 X-Client-Type: web|mobile
 
@@ -111,11 +218,11 @@ username=user@example.com&password=userpassword
 ```
 
 ### Step 2: MFA Verification
-Complete the login by providing the MFA code to `/mfa/verify`:
+Complete the login by providing the MFA code (TOTP or backup code) to `/auth/mfa/verify`:
 
 **Request:**
 ```http
-POST /api/v1/mfa/verify
+POST /api/v1/auth/mfa/verify
 Content-Type: application/json
 X-Client-Type: web|mobile
 
@@ -125,25 +232,32 @@ X-Client-Type: web|mobile
 }
 ```
 
+!!! tip "Backup Code Format"
+    Users can also use a backup code instead of a TOTP code. Backup codes are in `XXXX-XXXX` format (e.g., `A3K9-7BDF`). See [MFA Backup Codes](#mfa-backup-codes) for details.
+
 **Response (successful verification):**
 
-- **Web clients**: Tokens are set as HTTP-only cookies
+- **Web clients**: Access token and CSRF token in response body, refresh token as httpOnly cookie
 
 ```json
 {
-  "session_id": "unique_session_id"
+  "session_id": "unique_session_id",
+  "access_token": "eyJ...",
+  "csrf_token": "abc123...",
+  "token_type": "bearer",
+  "expires_in": 1734567890
 }
 ```
 
-- **Mobile clients**: Tokens are returned in response body
+- **Mobile clients**: All tokens returned in response body
 
 ```json
 {
+  "session_id": "unique_session_id",
   "access_token": "eyJ...",
   "refresh_token": "eyJ...",
-  "session_id": "unique_session_id",
-  "token_type": "Bearer",
-  "expires_in": 900,
+  "token_type": "bearer",
+  "expires_in": 1734567890
 }
 ```
 
@@ -156,11 +270,19 @@ X-Client-Type: web|mobile
 }
 ```
 
-- **Invalid MFA code**: HTTP 401 Unauthorized
+- **Invalid MFA code**: HTTP 400 Bad Request
 
 ```json
 {
-  "detail": "Invalid MFA code"
+  "detail": "Invalid MFA code. Failed attempts: 1"
+}
+```
+
+- **Account locked out (too many failures)**: HTTP 429 Too Many Requests
+
+```json
+{
+  "detail": "Too many failed MFA attempts. Account locked for 300 seconds."
 }
 ```
 
@@ -169,6 +291,75 @@ X-Client-Type: web|mobile
 - After successful MFA verification, the pending login is automatically cleaned up
 - The user must still be active at the time of MFA verification
 - If no MFA is enabled for the user, the standard single-step authentication flow applies
+
+## MFA Backup Codes
+
+Backup codes provide a recovery mechanism when users lose access to their authenticator app. When MFA is enabled, users receive 10 one-time backup codes that can be used instead of TOTP codes.
+
+### Backup Code Format
+
+- Format: `XXXX-XXXX` (8 alphanumeric characters with hyphen)
+- Example: `A3K9-7BDF`
+- Characters: Uppercase letters and digits (excluding ambiguous: 0, O, 1, I)
+- One-time use: Each code can only be used once
+
+### When Backup Codes Are Generated
+
+1. **Automatically on MFA Enable**: When a user enables MFA, 10 backup codes are generated and returned in the response
+2. **Manual Regeneration**: Users can regenerate all backup codes via `POST /profile/mfa/backup-codes` (invalidates all previous codes)
+
+### API Endpoints
+
+| What | URL | Method | Description |
+| ---- | --- | ------ | ----------- |
+| **Get Backup Code Status** | `/profile/mfa/backup-codes/status` | GET | Returns count of unused/used codes |
+| **Regenerate Backup Codes** | `/profile/mfa/backup-codes` | POST | Generates new codes (invalidates old) |
+
+### Backup Code Status Response
+
+```json
+{
+  "has_codes": true,
+  "total": 10,
+  "unused": 8,
+  "used": 2,
+  "created_at": "2025-12-21T10:30:00Z"
+}
+```
+
+### Regenerate Backup Codes Response
+
+```json
+{
+  "codes": [
+    "A3K9-7BDF",
+    "X2M5-9NPQ",
+    "..."
+  ],
+  "created_at": "2025-12-21T10:30:00Z"
+}
+```
+
+### Using Backup Codes for Login
+
+Backup codes can be used in the MFA verification step instead of TOTP codes:
+
+```http
+POST /api/v1/auth/mfa/verify
+Content-Type: application/json
+X-Client-Type: web|mobile
+
+{
+  "username": "user@example.com",
+  "mfa_code": "A3K9-7BDF"
+}
+```
+
+!!! warning "Important"
+    - Backup codes are shown only once when generated - users must save them securely
+    - Each backup code can only be used once
+    - Regenerating codes invalidates ALL previous backup codes
+    - Store backup codes in a secure location separate from your authenticator device
 
 ## OAuth/SSO Integration
 
@@ -210,144 +401,391 @@ Users can link their Endurain account to an OAuth provider:
 When authenticating via OAuth, the response format matches the standard authentication:
 
 - **Web clients**: Tokens set as HTTP-only cookies, redirected to app
-- **Mobile clients using WebView**: Tokens set as HTTP-only cookies in WebView, redirected to app
+- **Mobile clients**: Must use PKCE flow (see [Mobile SSO with PKCE](#mobile-sso-with-pkce) below)
 
-!!! warning "Mobile clients using WebView"
-    Mobile apps must use WebView for OAuth/SSO flows to properly handle redirects and cookies. Tokens returned in JSON format is not currently supported for SSO.
+!!! info "Mobile OAuth/SSO"
+    Mobile apps must use the PKCE flow for OAuth/SSO authentication. This provides enhanced security and a cleaner separation between the WebView and native app.
 
-## Mobile SSO Implementation Guide
+## Mobile Password Login with PKCE
 
 ### Overview
-Mobile applications must use an embedded WebView (or in-app browser) to handle OAuth/SSO authentication. The flow leverages browser-based redirects and cookie storage that are part of the OAuth 2.0 standard.
 
-### Prerequisites
+Mobile apps can use PKCE (Proof Key for Code Exchange, RFC 7636) for password authentication, providing enhanced security by preventing token interception in WebViews. This flow mirrors the OAuth/SSO PKCE flow but for local password authentication.
 
-- WebView component that supports:
-    - Cookie storage and management
-    - JavaScript execution
-    - URL interception/monitoring
-    - Custom headers (for subsequent API calls)
-- Secure storage for tokens (Keychain on iOS, KeyStore on Android)
+### Why Use PKCE for Password Login?
 
-### Step-by-Step Implementation
+| Traditional Mobile Password Login | PKCE Password Login |
+| --------------------------------- | ------------------- |
+| Tokens returned in response | Tokens exchanged via secure API |
+| Tokens visible in WebView context | Only session_id visible |
+| Potential token interception | No token in response body |
+| Simple but less secure | Secure, requires verifier |
 
-#### Step 1: Fetch Available Identity Providers
-Before presenting SSO options to users, fetch the list of enabled providers:
+### Step-by-Step PKCE Password Implementation
 
-**Request:**
+#### Step 1: Generate PKCE Code Verifier and Challenge
+
+Before sending credentials, generate a cryptographically random code verifier and compute its SHA256 challenge (same as [Mobile SSO with PKCE](#step-1-generate-pkce-code-verifier-and-challenge)):
+
+```
+code_challenge = BASE64URL(SHA256(code_verifier))
+```
+
+#### Step 2: Send Login Request with PKCE Parameters
+
+Include the code challenge in the login request:
+
+**Login Request with PKCE:**
 
 ```http
-GET /api/v1/public/idp
-```
-
-**Response:**
-
-```json
-[
-  {
-    "id": 1,
-    "name": "Keycloak",
-    "slug": "keycloak",
-    "icon": "keycloak"
-  },
-  {
-    "id": 2,
-    "name": "Pocket ID",
-    "slug": "pocket-id",
-    "icon": "pocketid"
-  }
-]
-```
-
-#### Step 2: Initialize WebView and Load SSO URL
-When user selects an SSO provider, open a WebView with the SSO initiation URL:
-
-**URL to Load:**
-
-```conf
-https://your-endurain-instance.com/api/v1/public/idp/login/{idp_slug}?redirect=/dashboard
-```
-
-**Parameters:**
-
-- `{idp_slug}`: The provider slug from Step 1 (e.g., "google", "keycloak")
-- `redirect` (optional): Frontend path to navigate to after successful login
-
-**What Happens:**
-
-1. Backend generates OAuth state and authorization URL
-2. WebView redirects to the identity provider's login page
-3. User authenticates with the provider (enters credentials, 2FA, etc.)
-
-#### Step 3: Monitor WebView URL Changes
-Set up URL interception to detect when the OAuth callback completes:
-
-**URLs to Monitor:**
-
-- Success: `https://your-endurain-instance.com/login?sso=success&session_id={uuid}`
-- Success with redirect: `https://your-endurain-instance.com/login?sso=success&session_id={uuid}&redirect=/dashboard`
-- Error: `https://your-endurain-instance.com/login?error=sso_failed`
-
-#### Step 4: Extract tokens from WebView Cookies, store tokens securely and clean up the WebView
-When SSO succeeds, extract authentication tokens from the WebView's cookie store and store them securely:
-
-**Cookies to Extract:**
-
-- `endurain_access_token`: JWT access token (15 min expiry)
-- `endurain_refresh_token`: JWT refresh token (7 day expiry)
-
-#### Step 5: Make Authenticated API Requests
-Use extracted tokens for subsequent API calls with the required headers:
-
-**Required Headers:**
-
-- `Authorization: Bearer {access_token}`
-- `X-Client-Type: mobile`
-
-#### Step 6: Implement Token Refresh
-Access tokens expire after 15 minutes. Implement automatic refresh logic:
-
-**Refresh Request:**
-
-```http
-POST /api/v1/refresh
-Authorization: Bearer {refresh_token}
+POST /api/v1/auth/login
+Content-Type: application/x-www-form-urlencoded
 X-Client-Type: mobile
+
+username=user@example.com&password=userpassword&code_challenge={challenge}&code_challenge_method=S256
 ```
 
-**Response:**
+**Form Parameters:**
+
+| Parameter | Required | Description |
+| --------- | -------- | ----------- |
+| `username` | Yes | Username or email |
+| `password` | Yes | User's password |
+| `code_challenge` | Yes (PKCE) | Base64url-encoded SHA256 hash of code_verifier |
+| `code_challenge_method` | Yes (PKCE) | Must be `S256` |
+
+**Successful Response (HTTP 200):**
+
+Instead of tokens, receive a session_id for token exchange:
 
 ```json
 {
-  "access_token": "eyJ...",
-  "refresh_token": "eyJ...",
-  "session_id": "uuid",
-  "token_type": "Bearer",
+  "session_id": "550e8400-e29b-41d4-a716-446655440000",
+  "mfa_required": false,
+  "message": "Complete authentication by exchanging tokens at /session/{session_id}/tokens"
+}
+```
+
+#### Step 3: Exchange Session for Tokens (PKCE Verification)
+
+Use the code verifier to securely exchange the session for tokens:
+
+**Token Exchange Request:**
+
+```http
+POST /api/v1/session/{session_id}/tokens
+Content-Type: application/json
+X-Client-Type: mobile
+
+{
+  "code_verifier": "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"
+}
+```
+
+**Successful Response (HTTP 200):**
+
+```json
+{
+  "session_id": "550e8400-e29b-41d4-a716-446655440000",
+  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "expires_in": 900,
+  "token_type": "Bearer"
+}
+```
+
+**Error Responses:**
+
+| Status | Error | Description |
+| ------ | ----- | ----------- |
+| 400 | Invalid code_verifier | Verifier doesn't match the challenge |
+| 404 | Session not found | Invalid session_id |
+| 409 | Tokens already exchanged | Replay attack prevention |
+| 429 | Rate limit exceeded | Max 10 requests/minute per IP |
+
+#### Step 4: Store Tokens Securely
+
+Store the received tokens in secure platform storage:
+
+- **iOS**: Keychain Services
+- **Android**: EncryptedSharedPreferences or Android Keystore
+
+#### Step 5: Use Tokens for API Requests
+
+Use the tokens for authenticated API calls (same as [Mobile SSO with PKCE](#step-6-use-tokens-for-api-requests)).
+
+### Backward Compatibility
+
+Mobile clients that don't provide PKCE parameters will receive tokens directly (legacy behavior):
+
+```http
+POST /api/v1/auth/login
+Content-Type: application/x-www-form-urlencoded
+X-Client-Type: mobile
+
+username=user@example.com&password=userpassword
+```
+
+Responds with tokens directly (no PKCE):
+
+```json
+{
+  "session_id": "550e8400-e29b-41d4-a716-446655440000",
+  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "token_type": "bearer",
   "expires_in": 900
 }
 ```
 
+### With MFA Enabled
+
+If the user has MFA enabled, the flow includes an additional MFA verification step:
+
+1. Client sends login with PKCE parameters
+2. Backend returns `"mfa_required": true` with message
+3. Client collects MFA code from user
+4. Client sends MFA code to `/auth/mfa/verify` with PKCE parameters
+5. Backend verifies MFA and returns session_id (for PKCE) or tokens directly
+6. Client exchanges session_id for tokens using code_verifier
+
+**MFA Verification with PKCE:**
+
+```http
+POST /api/v1/auth/mfa/verify?code_challenge={challenge}&code_challenge_method=S256
+Content-Type: application/json
+X-Client-Type: mobile
+
+{
+  "username": "user@example.com",
+  "mfa_code": "123456"
+}
+```
+
+**Response (Session ID for Exchange):**
+
+```json
+{
+  "session_id": "550e8400-e29b-41d4-a716-446655440000",
+  "mfa_required": false,
+  "message": "Complete authentication by exchanging tokens at /session/{session_id}/tokens"
+}
+```
+
+Then exchange for tokens as in Step 3 above.
+
+### Security Features
+
+| Feature | Description |
+| ------- | ----------- |
+| **PKCE S256** | SHA256 challenge prevents code interception |
+| **One-time exchange** | Tokens can only be exchanged once per session |
+| **10-minute expiry** | Session expires after 10 minutes |
+| **Rate limiting** | 10 token exchange requests per minute |
+| **Session binding** | Session is cryptographically bound to PKCE challenge |
+
+## Mobile SSO with PKCE
+
+### Overview
+PKCE (Proof Key for Code Exchange, RFC 7636) is required for mobile OAuth/SSO authentication. It provides enhanced security by eliminating the need to extract tokens from WebView cookies, preventing authorization code interception attacks, and enabling a cleaner separation between the WebView and native app.
+
+### Why Use PKCE?
+
+| Traditional WebView Flow | PKCE Flow |
+| ------------------------ | --------- |
+| Extract tokens from cookies | Tokens delivered via secure API |
+| Cookies may leak across contexts | No cookie extraction needed |
+| Complex WebView cookie management | Simple token exchange |
+| Potential timing issues | Atomic token exchange |
+
+### PKCE Flow Overview
+
+```
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│  Mobile App │     │   Backend   │     │   WebView   │     │     IdP     │
+└──────┬──────┘     └──────┬──────┘     └──────┬──────┘     └──────┬──────┘
+       │                   │                   │                   │
+       │ Generate verifier │                   │                   │
+       │ & challenge       │                   │                   │
+       │──────────────────>│                   │                   │
+       │                   │                   │                   │
+       │     Open WebView with challenge       │                   │
+       │──────────────────────────────────────>│                   │
+       │                   │                   │                   │
+       │                   │      Redirect to IdP                  │
+       │                   │──────────────────────────────────────>│
+       │                   │                   │                   │
+       │                   │                   │   User logs in    │
+       │                   │                   │<─────────────────>│
+       │                   │                   │                   │
+       │                   │   Callback with code & state          │
+       │                   │<──────────────────────────────────────│
+       │                   │                   │                   │
+       │     Redirect with session_id          │                   │
+       │<──────────────────────────────────────│                   │
+       │                   │                   │                   │
+       │ POST token exchange with verifier     │                   │
+       │──────────────────>│                   │                   │
+       │                   │                   │                   │
+       │   Return tokens   │                   │                   │
+       │<──────────────────│                   │                   │
+       │                   │                   │                   │
+```
+
+### Step-by-Step PKCE Implementation
+
+#### Step 1: Generate PKCE Code Verifier and Challenge
+
+Before initiating the OAuth flow, generate a cryptographically random code verifier and compute its SHA256 challenge:
+
+**Code Verifier Requirements (RFC 7636):**
+
+- Length: 43-128 characters
+- Characters: `A-Z`, `a-z`, `0-9`, `-`, `.`, `_`, `~`
+- Cryptographically random
+
+**Code Challenge Computation:**
+
+```
+code_challenge = BASE64URL(SHA256(code_verifier))
+```
+
+#### Step 2: Initiate OAuth with PKCE Challenge
+
+Open a WebView with the SSO URL including PKCE parameters:
+
+**URL to Load:**
+
+```http
+https://your-endurain-instance.com/api/v1/public/idp/login/{idp_slug}?code_challenge={challenge}&code_challenge_method=S256&redirect=/dashboard
+```
+
+**Query Parameters:**
+
+| Parameter | Required | Description |
+| --------- | -------- | ----------- |
+| `code_challenge` | Yes (PKCE) | Base64url-encoded SHA256 hash of code_verifier |
+| `code_challenge_method` | Yes (PKCE) | Must be `S256` |
+| `redirect` | No | Frontend path after successful login |
+
+#### Step 3: Monitor WebView for Callback
+
+The OAuth flow proceeds as normal. Monitor the WebView URL for the success redirect:
+
+**Success URL Pattern:**
+
+```http
+https://your-endurain-instance.com/login?sso=success&session_id={uuid}&redirect=/dashboard
+```
+
+Extract the `session_id` from the URL - this is needed for token exchange.
+
+#### Step 4: Exchange Session for Tokens (PKCE Verification)
+
+After obtaining the `session_id`, close the WebView and exchange it for tokens using the code verifier:
+
+**Token Exchange Request:**
+
+```http
+POST /api/v1/public/idp/session/{session_id}/tokens
+Content-Type: application/json
+X-Client-Type: mobile
+
+{
+  "code_verifier": "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"
+}
+```
+
+**Successful Response (HTTP 200):**
+
+```json
+{
+  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "csrf_token": "abc123def456...",
+  "expires_in": 900,
+  "token_type": "Bearer"
+}
+```
+
+**Error Responses:**
+
+| Status | Error | Description |
+| ------ | ----- | ----------- |
+| 400 | Invalid code_verifier | Verifier doesn't match the challenge |
+| 404 | Session not found | Invalid session_id or not a PKCE flow |
+| 409 | Tokens already exchanged | Replay attack prevention |
+| 429 | Rate limit exceeded | Max 10 requests/minute per IP |
+
+#### Step 5: Store Tokens Securely
+
+Store the received tokens in secure platform storage:
+
+- **iOS**: Keychain Services
+- **Android**: EncryptedSharedPreferences or Android Keystore
+
+#### Step 6: Use Tokens for API Requests
+
+Use the tokens for authenticated API calls:
+
+```http
+GET /api/v1/activities
+Authorization: Bearer {access_token}
+X-Client-Type: mobile
+X-CSRF-Token: {csrf_token}
+```
+
+### Security Features
+
+| Feature | Description |
+| ------- | ----------- |
+| **PKCE S256** | SHA256 challenge prevents code interception |
+| **One-time exchange** | Tokens can only be exchanged once per session |
+| **10-minute expiry** | OAuth state expires after 10 minutes |
+| **Rate limiting** | 10 token exchange requests per minute |
+| **Session linking** | Session is cryptographically bound to OAuth state |
+
 ## Configuration
 
 ### Environment Variables
+
 The following environment variables control authentication behavior:
+
+#### Token Configuration
 
 | Variable | Description | Default | Required |
 | -------- | ----------- | ------- | -------- |
-| `SECRET_KEY` | Secret key for JWT signing | - | Yes |
+| `SECRET_KEY` | Secret key for JWT signing (min 32 characters recommended) | - | Yes |
 | `ALGORITHM` | JWT signing algorithm | `HS256` | No |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | Access token lifetime in minutes | `15` | No |
 | `REFRESH_TOKEN_EXPIRE_DAYS` | Refresh token lifetime in days | `7` | No |
-| `BACKEND_CORS_ORIGINS` | Allowed CORS origins | `[]` | No |
+
+#### Session Configuration
+
+| Variable | Description | Default | Required |
+| -------- | ----------- | ------- | -------- |
+| `SESSION_IDLE_TIMEOUT_ENABLED` | Enable session idle timeout | `false` | No |
+| `SESSION_IDLE_TIMEOUT_HOURS` | Hours of inactivity before session expires | `1` | No |
+| `SESSION_ABSOLUTE_TIMEOUT_HOURS` | Maximum session lifetime in hours | `24` | No |
+
+#### Security Configuration
+
+| Variable | Description | Default | Required |
+| -------- | ----------- | ------- | -------- |
+| `BACKEND_CORS_ORIGINS` | Allowed CORS origins (JSON array) | `[]` | No |
+| `FRONTEND_PROTOCOL` | Protocol for cookie security (`http` or `https`) | `http` | No |
 
 ### Cookie Configuration
-For web clients, cookies are configured with:
 
-- **HttpOnly**: Prevents JavaScript access (security measure)
-- **Secure**: Only sent over HTTPS in production
-- **SameSite**: Protection against CSRF attacks
-- **Domain**: Set to match your application domain
-- **Path**: Set to `/` for application-wide access
+For web clients, the refresh token cookie is configured with:
+
+| Attribute | Value | Purpose |
+|-----------|-------|---------|
+| **HttpOnly** | `true` | Prevents JavaScript access (XSS protection) |
+| **Secure** | `true` (in production) | Only sent over HTTPS |
+| **SameSite** | `Strict` | Prevents CSRF attacks |
+| **Path** | `/` | Application-wide access |
+| **Expires** | 7 days (default) | Matches refresh token lifetime |
 
 ## Security Scopes
 
@@ -435,30 +873,46 @@ Scopes are automatically assigned based on user permissions and are embedded in 
 
 ## Best Practices
 
-### For Client Applications
+### For Web Client Applications
 
-1. **Always use HTTPS** in production to protect credentials and tokens
-2. **Store tokens securely**:
-   - Web: Use HTTP-only cookies (handled automatically)
-   - Mobile: Use secure storage (Keychain on iOS, KeyStore on Android)
-3. **Implement token refresh** before access token expires
-4. **Handle rate limits** with exponential backoff
-5. **Validate SSL certificates** to prevent man-in-the-middle attacks
-6. **Clear tokens on logout** to prevent unauthorized access
+1. **Store access and CSRF tokens in memory** - Never persist in localStorage or sessionStorage
+2. **Implement automatic token refresh** - Refresh before access token expires (e.g., at 80% of lifetime)
+3. **Handle concurrent refresh requests** - Use a refresh lock pattern to prevent race conditions
+4. **Always include required headers:**
+    - `Authorization: Bearer {access_token}` for all authenticated requests
+    - `X-Client-Type: web` for all requests
+    - `X-CSRF-Token: {csrf_token}` for POST/PUT/DELETE/PATCH requests
+5. **Handle page reload gracefully** - Call `/auth/refresh` on app initialization to restore in-memory tokens
+6. **Clear tokens on logout** - The httpOnly cookie is cleared by the backend
+
+### For Mobile Client Applications
+
+1. **Store tokens securely**:
+    - **iOS**: Keychain Services
+    - **Android**: EncryptedSharedPreferences or Android Keystore
+2. **Use PKCE for OAuth/SSO** - Required for mobile OAuth flows
+3. **Include required headers:**
+    - `Authorization: Bearer {access_token}` for all authenticated requests
+    - `X-Client-Type: mobile` for all requests
+    - `X-CSRF-Token: {csrf_token}` for state-changing requests
+4. **Handle token refresh proactively** - Refresh before expiration
+5. **Implement secure token deletion** on logout
 
 ### For Security
 
 1. **Never expose `SECRET_KEY`** in client code or version control
-2. **Use strong, randomly generated secrets** for production
-3. **Enable MFA** for enhanced account security
-4. **Monitor failed login attempts** for suspicious activity
-5. **Rotate refresh tokens** periodically for long-lived sessions
-6. **Use appropriate scopes** - request only the permissions needed
+2. **Use strong, randomly generated secrets** (minimum 32 characters)
+3. **Always use HTTPS** in production environments
+4. **Enable MFA** for enhanced account security
+5. **Monitor for token reuse** - Indicates potential token theft
+6. **Enable session idle timeout** for sensitive applications
+7. **Use appropriate scopes** - Request only necessary permissions
 
-### For OAuth/SSO
+### For OAuth/SSO Integration
 
-1. **Validate state parameter** to prevent CSRF attacks
-2. **Use PKCE** (Proof Key for Code Exchange) for mobile apps
-3. **Implement proper redirect URL validation** to prevent open redirects
+1. **Always use PKCE** - Required for mobile, recommended for web
+2. **Validate state parameter** - Prevents CSRF attacks on OAuth flow
+3. **Implement proper redirect URL validation** - Prevents open redirects
 4. **Handle provider errors gracefully** with user-friendly messages
-5. **Support account linking** to allow users to connect multiple providers
+5. **Support account linking** - Allow users to connect multiple providers
+6. **Respect token expiry** - OAuth state expires after 10 minutes

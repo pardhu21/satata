@@ -1,16 +1,39 @@
 <div align="center">
+
+<div align="center" >
+
+# 🔴 IMPORTANT NOTICE
+
+<strong>
+This repository is a <span style="color:red;">FORK</span> of the original
+<a href="https://github.com/endurain-project/endurain">Endurain</a> project.
+</strong>
+
+<br/>
+
+<strong>
+🚧 This is a <span style="color:red;">PERSONAL / INDEPENDENT EXPERIMENT</span><br/>
+It is <u>NOT</u> the official Endurain repository.
+</strong>
+
+<br/>
+<br/>
+<br/>
+<br/>
+
+</div>
   <img src="frontend/app/public/logo/logo.png" width="128" height="128">
 
-  # Endurain
+# Endurain
 
-  <a title="Crowdin" target="_blank" href="https://crowdin.com/project/endurain"><img src="https://badges.crowdin.net/endurain/localized.svg"></a>
-  ![License](https://img.shields.io/github/license/endurain-project/endurain)
-  [![GitHub release](https://img.shields.io/github/v/release/endurain-project/endurain)](https://github.com/endurain-project/endurain/releases)
-  [![GitHub stars](https://img.shields.io/github/stars/endurain-project/endurain.svg?style=social&label=Star)](https://github.com/endurain-project/endurain/stargazers)
-  [![Trademark Policy](https://img.shields.io/badge/trademark-Endurain%E2%84%A2-blue)](./TRADEMARK.md)
+<a title="Crowdin" target="_blank" href="https://crowdin.com/project/endurain"><img src="https://badges.crowdin.net/endurain/localized.svg"></a>
+![License](https://img.shields.io/github/license/endurain-project/endurain)
+[![GitHub release](https://img.shields.io/github/v/release/endurain-project/endurain)](https://github.com/endurain-project/endurain/releases)
+[![GitHub stars](https://img.shields.io/github/stars/endurain-project/endurain.svg?style=social&label=Star)](https://github.com/endurain-project/endurain/stargazers)
+[![Trademark Policy](https://img.shields.io/badge/trademark-Endurain%E2%84%A2-blue)](./TRADEMARK.md)
 
-  **A self-hosted fitness tracking service**  
-  Visit Endurain's [Mastodon profile](https://fosstodon.org/@endurain) and [Discord server](https://discord.gg/6VUjUq2uZR).
+**A self-hosted fitness tracking service**  
+ Visit Endurain's [Mastodon profile](https://fosstodon.org/@endurain) and [Discord server](https://discord.gg/6VUjUq2uZR).
 
   <img src="screenshot_01.png" alt="Endurain Screenshot">
 </div>
@@ -63,7 +86,7 @@ Contributions are welcomed! Please open an issue to discuss any changes or impro
 
 ## Help Translate
 
-Endurain has multi-language support, and you can help translate it into more languages via [Crowdin](https://crowdin.com/project/endurain). 
+Endurain has multi-language support, and you can help translate it into more languages via [Crowdin](https://crowdin.com/project/endurain).
 
 ## License
 
@@ -71,7 +94,7 @@ This project is licensed under the AGPL-3.0 License - see the [LICENSE](LICENSE)
 
 ## Trademark Notice
 
-Endurain® is a trademark of João Vitória Silva.  
+Endurain® is a trademark of João Vitória Silva.
 
 You are welcome to self-host Endurain and use the name and logo, including for personal, educational, research, or community (non-commercial) use.  
 Commercial use of the Endurain name or logos (such as offering paid hosting, products, or services) is **not permitted without prior written permission**.

@@ -5,6 +5,12 @@
   "unitsImperial": "Imperial",
   "currencyLabel": "Moeda predefinida",
   "numRecordsLabel": "Número de registros por página",
+  "passwordTitle": "Política de palavra-passe",
+  "passwordTypeLabel": "Tipo de política de palavra-passe",
+  "passwordTypeStrict": "Estrito (deve incluir maiúsculas, minúsculas, número e caractere especial)",
+  "passwordTypeLengthOnly": "Comprimento apenas (requisito de comprimento mínimo)",
+  "passwordLengthRegularUsersLabel": "Tamanho mínimo de palavra-passe para utilizadores comuns",
+  "passwordLengthAdminsUsersLabel": "Tamanho mínimo de palavra-passe para utilizadores administradores",
   "signupTitle": "Registar",
   "adminApprovalLabel": "Aprovação do administrador",
   "emailConfirmationLabel": "E-mail de confirmação",
@@ -31,5 +37,13 @@
   "successPhotoDelete": "Foto eliminada com sucesso",
   "successUpdateServerSettings": "Definições do servidor atualizadas com sucesso",
   "errorUpdateServerSettings": "Erro ao atualizar definições do servidor",
-  "errorFetchingServerSettings": "Erro ao obter definições do servidor"
+  "errorFetchingServerSettings": "Erro ao obter definições do servidor",
+  "mapsTitle": "Mapas",
+  "tileTemplateLabel": "Modelo padrão para servidor de fundo de mapas",
+  "tileTemplateCustom": "Personalizado",
+  "tileTemplateApiKeyWarning": "Este modelo requer uma chave de API configurada no backend.",
+  "tileTemplateFrontendApiKeyWarning": "Este modelo pode exigir uma chave de API configurada no frontend.",
+  "tileserverUrlLabel": "URL do servidor de tile",
+  "tileserverAttributionLabel": "Atribuição do servidor de tile",
+  "mapBackgroundColorLabel": "Cor de fundo do mapa"
 }

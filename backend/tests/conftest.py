@@ -17,19 +17,24 @@ load_dotenv(dotenv_path=env_test_path)
 # Add the app directory to the Python path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "app"))
 
-import session.router as session_router
+import users.users_sessions.router as users_session_router
 import auth.password_hasher as auth_password_hasher
 import auth.token_manager as auth_token_manager
 import auth.security as auth_security
-import users.user.schema as user_schema
+import users.users.schema as user_schema
 
 # Variables and constants
 DEFAULT_ROUTER_MODULES = [
     "session.router",
-    "health_sleep.router",
-    "health_steps.router",
-    "health_targets.router",
-    "health_weight.router",
+    "health.health_sleep.router",
+    "health.health_steps.router",
+    "health.health_targets.router",
+    "health.health_weight.router",
+    "users.users_goals.router",
+]
+
+PUBLIC_ROUTER_MODULES = [
+    "server_settings.public_router",
 ]
 
 
@@ -69,20 +74,20 @@ def mock_db() -> MagicMock:
 
 
 @pytest.fixture
-def sample_user_read() -> user_schema.UserRead:
+def sample_user_read() -> user_schema.UsersRead:
     """
-    Creates and returns a sample instance of UserRead for testing purposes.
+    Creates and returns a sample instance of UsersRead for testing purposes.
 
     Returns:
-        user_schema.UserRead: A sample user object with predefined attributes.
+        user_schema.UsersRead: A sample user object with predefined attributes.
     """
-    return user_schema.UserRead(
+    return user_schema.UsersRead(
         id=1,
         name="Test User",
         username="testuser",
         email="test@example.com",
         active=True,
-        access_type=user_schema.UserAccessType.REGULAR,
+        access_type=user_schema.UserAccessType.REGULAR.value,
     )
 
 
@@ -92,15 +97,15 @@ def sample_inactive_user():
     Creates and returns a sample inactive user instance for testing purposes.
 
     Returns:
-        user_schema.UserRead: An instance representing an inactive user with predefined attributes.
+        user_schema.UsersRead: An instance representing an inactive user with predefined attributes.
     """
-    return user_schema.UserRead(
+    return user_schema.UsersRead(
         id=2,
         name="Inactive User",
         username="inactive",
         email="inactive@example.com",
         active=False,
-        access_type=user_schema.UserAccessType.REGULAR,
+        access_type=user_schema.UserAccessType.REGULAR.value,
     )
 
 
@@ -139,14 +144,18 @@ def _include_router_if_exists(app: FastAPI, dotted: str):
         mod = import_module(dotted)
         router = getattr(mod, "router", None)
         if router is not None:
-            if dotted == "health_sleep.router":
+            if dotted == "health.health_sleep.router":
                 app.include_router(router, prefix="/health_sleep")
-            elif dotted == "health_steps.router":
+            elif dotted == "health.health_steps.router":
                 app.include_router(router, prefix="/health_steps")
-            elif dotted == "health_targets.router":
+            elif dotted == "health.health_targets.router":
                 app.include_router(router, prefix="/health_targets")
-            elif dotted == "health_weight.router":
+            elif dotted == "health.health_weight.router":
                 app.include_router(router, prefix="/health_weight")
+            elif dotted == "users.users_goals.router":
+                app.include_router(router, prefix="/user_goals")
+            elif dotted == "server_settings.public_router":
+                app.include_router(router, prefix="/server_settings/public")
             else:
                 app.include_router(router)
     except Exception:
@@ -200,6 +209,16 @@ def fast_api_app(password_hasher, token_manager, mock_db) -> FastAPI:
     # Include any routers you have configured
     for dotted in DEFAULT_ROUTER_MODULES:
         _include_router_if_exists(app, dotted)
+
+    # Include server_settings router with prefix
+    _include_router_if_exists(app, "server_settings.router")
+    try:
+        mod = import_module("server_settings.router")
+        router = getattr(mod, "router", None)
+        if router is not None:
+            app.include_router(router, prefix="/server_settings")
+    except Exception:
+        pass
 
     app.state._client_type = "web"
 
@@ -344,44 +363,44 @@ def fast_api_app(password_hasher, token_manager, mock_db) -> FastAPI:
 
     try:
         app.dependency_overrides[
-            session_router.auth_security.header_client_type_scheme
+            users_session_router.auth_security.header_client_type_scheme
         ] = _client_type_override
         app.dependency_overrides[
-            session_router.session_schema.get_pending_mfa_store
+            users_session_router.users_session_schema.get_pending_mfa_store
         ] = lambda: fake_store
 
         # Override security dependencies for authenticated endpoint testing
-        app.dependency_overrides[session_router.auth_security.validate_access_token] = (
-            _mock_validate_access_token
-        )
         app.dependency_overrides[
-            session_router.auth_security.validate_refresh_token
+            users_session_router.auth_security.validate_access_token
+        ] = _mock_validate_access_token
+        app.dependency_overrides[
+            users_session_router.auth_security.validate_refresh_token
         ] = _mock_validate_refresh_token
-        app.dependency_overrides[session_router.auth_security.get_access_token] = (
-            _mock_get_access_token
-        )
-        app.dependency_overrides[session_router.auth_security.get_refresh_token] = (
-            _mock_get_refresh_token
-        )
         app.dependency_overrides[
-            session_router.auth_security.get_sub_from_access_token
+            users_session_router.auth_security.get_access_token
+        ] = _mock_get_access_token
+        app.dependency_overrides[
+            users_session_router.auth_security.get_refresh_token
+        ] = _mock_get_refresh_token
+        app.dependency_overrides[
+            users_session_router.auth_security.get_sub_from_access_token
         ] = _mock_get_sub_from_access_token
         app.dependency_overrides[
-            session_router.auth_security.get_sid_from_access_token
+            users_session_router.auth_security.get_sid_from_access_token
         ] = _mock_get_sid_from_access_token
         app.dependency_overrides[
-            session_router.auth_security.get_sub_from_refresh_token
+            users_session_router.auth_security.get_sub_from_refresh_token
         ] = _mock_get_sub_from_refresh_token
         app.dependency_overrides[
-            session_router.auth_security.get_sid_from_refresh_token
+            users_session_router.auth_security.get_sid_from_refresh_token
         ] = _mock_get_sid_from_refresh_token
         app.dependency_overrides[
-            session_router.auth_security.get_and_return_access_token
+            users_session_router.auth_security.get_and_return_access_token
         ] = _mock_get_and_return_access_token
         app.dependency_overrides[
-            session_router.auth_security.get_and_return_refresh_token
+            users_session_router.auth_security.get_and_return_refresh_token
         ] = _mock_get_and_return_refresh_token
-        app.dependency_overrides[session_router.auth_security.check_scopes] = (
+        app.dependency_overrides[users_session_router.auth_security.check_scopes] = (
             _mock_check_scopes
         )
     except Exception:
@@ -465,3 +484,58 @@ def set_client_type_mobile(fast_api_app: FastAPI):
     """
     fast_api_app.state._client_type = "mobile"
     return fast_api_app.state._client_type
+
+
+@pytest.fixture
+def fast_api_app_public(password_hasher, token_manager, mock_db) -> FastAPI:
+    """
+    Creates and configures a FastAPI application instance for testing public endpoints.
+
+    This fixture is similar to fast_api_app but includes public routers that
+    don't require authentication.
+
+    Args:
+        password_hasher: An object or callable used to hash passwords.
+        token_manager: An object or callable responsible for managing authentication tokens.
+        mock_db: A mock database session or connection.
+
+    Returns:
+        FastAPI: A configured FastAPI application instance for public endpoint testing.
+    """
+    app = FastAPI()
+
+    # Include public routers
+    for dotted in PUBLIC_ROUTER_MODULES:
+        _include_router_if_exists(app, dotted)
+
+    # Generic overrides
+    _override_if_exists(
+        app, "auth.password_hasher", "get_password_hasher", lambda: password_hasher
+    )
+    _override_if_exists(
+        app, "auth.token_manager", "get_token_manager", lambda: token_manager
+    )
+    _override_if_exists(
+        app, "core.database", "get_db", lambda: mock_db
+    ) or _override_if_exists(
+        app, "core_database", "get_db", lambda: mock_db
+    ) or _override_if_exists(
+        app, "app.core.database", "get_db", lambda: mock_db
+    )
+
+    return app
+
+
+@pytest.fixture
+def fast_api_client_public(fast_api_app_public: FastAPI) -> TestClient:
+    """
+    Creates and returns a TestClient instance for public endpoints.
+
+    Args:
+        fast_api_app_public (FastAPI): The FastAPI application instance configured
+            for public endpoints.
+
+    Returns:
+        TestClient: A test client for making requests to public endpoints.
+    """
+    return TestClient(fast_api_app_public)

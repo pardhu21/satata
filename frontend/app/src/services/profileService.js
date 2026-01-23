@@ -52,13 +52,20 @@ export const profile = {
     return fetchPostRequest('profile/mfa/setup', {})
   },
   enableMFA(data) {
-    return fetchPostRequest('profile/mfa/enable', data)
+    return fetchPutRequest('profile/mfa/enable', data)
   },
   disableMFA(data) {
-    return fetchPostRequest('profile/mfa/disable', data)
+    return fetchPutRequest('profile/mfa/disable', data)
   },
   verifyMFA(data) {
     return fetchPostRequest('profile/mfa/verify', data)
+  },
+  // Backup codes endpoints
+  getBackupCodeStatus() {
+    return fetchGetRequest('profile/mfa/backup-codes/status')
+  },
+  regenerateBackupCodes() {
+    return fetchPostRequest('profile/mfa/backup-codes', {})
   },
   getMyIdentityProviders() {
     return fetchGetRequest('profile/idp')
@@ -66,7 +73,13 @@ export const profile = {
   unlinkIdentityProvider(idpId) {
     return fetchDeleteRequest(`profile/idp/${idpId}`)
   },
-  linkIdentityProvider(idpId) {
-    return fetchGetRequestWithRedirect(`profile/idp/${idpId}/link`)
+  generateLinkToken(idpId) {
+    return fetchPostRequest(`profile/idp/${idpId}/link/token`, {})
+  },
+  async linkIdentityProvider(idpId) {
+    const response = await this.generateLinkToken(idpId)
+    const linkToken = response.token
+
+    fetchGetRequestWithRedirect(`profile/idp/${idpId}/link?link_token=${linkToken}`)
   }
 }
