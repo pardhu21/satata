@@ -11,6 +11,7 @@
   "hidePassword": "Amaga contrasenya",
   "showPassword": "Mostra contrasenya",
   "mfaCode": "Codi MFA",
+  "mfaCodeHint": "Introdueix el codi de 6 dígits de la teva aplicació d'autenticació, o fes servir un codi de reserva",
   "mfaRequired": "Autenticació multifactor requerida. Si us plau entra el codi de 6 dígits.",
   "verifyMFAButton": "Verificar MFA",
   "invalidMFACode": "Codi MFA invàlid. Torna a provar.",
@@ -45,5 +46,6 @@
   "ssoAccountDisabled": "Compte deshabilitat. Contacta amb l'admin",
   "ssoAutoCreateDisabled": "Auto creació de comptes deshabilitat. Contacta amn l'admin",
   "ssoErrorUndefined": "Error durant autenticació SSO",
-  "forceLocalLogin": "Usa usuari i contrasenya per accedir."
+  "forceLocalLogin": "Usa usuari i contrasenya per accedir.",
+  "ssoTokenExchangeFailed": "Intercanvi de tokens SSO fallit."
 }

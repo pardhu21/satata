@@ -50,11 +50,36 @@ export interface RouteQueryHandlers {
  * @property mfa_required - Whether MFA verification is required.
  * @property username - The authenticated username.
  * @property session_id - The session identifier token.
+ * @property access_token - The JWT access token (OAuth 2.1).
+ * @property csrf_token - The CSRF token for request validation (OAuth 2.1).
+ * @property token_type - The token type (always "bearer").
+ * @property expires_in - Token expiration timestamp.
  */
 export interface LoginResponse {
   mfa_required?: boolean
   username?: string
   session_id: string
+  access_token?: string
+  csrf_token?: string
+  token_type?: string
+  expires_in?: number
+}
+
+/**
+ * Response from SSO token exchange endpoint.
+ *
+ * @property session_id - The session identifier.
+ * @property access_token - The JWT access token.
+ * @property csrf_token - The CSRF token.
+ * @property token_type - The token type (always "bearer").
+ * @property expires_in - Token expiration timestamp.
+ */
+export interface TokenExchangeResponse {
+  session_id: string
+  access_token: string
+  csrf_token: string
+  token_type: string
+  expires_in: number
 }
 
 /**
@@ -147,7 +172,7 @@ export interface SSOProvider {
  * @remarks
  * Refresh tokens are NOT included in this interface and are handled securely on the backend.
  */
-export interface UserIdentityProvider {
+export interface UsersIdentityProvider {
   id: number
   user_id: number
   idp_id: number
@@ -170,11 +195,52 @@ export interface UserIdentityProvider {
  * The backend enriches responses with IDP information from the identity_providers table.
  * Used in UserIdentityProviderListComponent and UsersListComponent.
  */
-export interface UserIdentityProviderEnriched extends UserIdentityProvider {
+export interface UserIdentityProviderEnriched extends UsersIdentityProvider {
   idp_name: string
   idp_slug: string
   idp_icon?: string
   idp_provider_type: string
+}
+
+/**
+ * Activity data structure from the backend.
+ *
+ * @property activity_type - Numeric identifier for the activity type.
+ * @property distance - Total distance in meters.
+ */
+export interface Activity {
+  activity_type: number
+  distance: number
+}
+
+/**
+ * Single waypoint in an activity stream.
+ *
+ * @property hr - Heart rate value (as string).
+ * @property power - Power value in watts (as string).
+ * @property cad - Cadence value in RPM or stroke rate in SPM (as string).
+ * @property ele - Elevation value in meters (as string).
+ * @property vel - Velocity value in m/s.
+ * @property pace - Pace value in seconds per meter, or null if unavailable.
+ */
+export interface StreamWaypoint {
+  hr?: string
+  power?: string
+  cad?: string
+  ele?: string
+  vel?: number
+  pace?: number | null
+}
+
+/**
+ * Activity stream containing time-series data.
+ *
+ * @property stream_type - Numeric identifier for the stream type (1=HR, 2=Power, 3=Cadence, 4=Elevation, 5=Velocity, 6=Pace).
+ * @property stream_waypoints - Array of waypoint data for this stream.
+ */
+export interface ActivityStream {
+  stream_type: number
+  stream_waypoints: StreamWaypoint[]
 }
 
 /**

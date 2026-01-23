@@ -16,33 +16,33 @@ import activities.activity_summaries.router as activity_summaries_router
 import activities.activity_workout_steps.router as activity_workout_steps_router
 import activities.activity_workout_steps.public_router as activity_workout_steps_public_router
 import auth.router as auth_router
+import auth.identity_providers.router as identity_providers_router
+import auth.identity_providers.public_router as identity_providers_public_router
+import auth.security as auth_security
 import core.config as core_config
 import core.router as core_router
 import followers.router as followers_router
 import garmin.router as garmin_router
 import gears.gear.router as gears_router
 import gears.gear_components.router as gear_components_router
-import health_sleep.router as health_sleep_router
-import health_weight.router as health_weight_router
-import health_steps.router as health_steps_router
-import health_targets.router as health_targets_router
-import auth.identity_providers.router as identity_providers_router
-import auth.identity_providers.public_router as identity_providers_public_router
+import health.health_sleep.router as health_sleep_router
+import health.health_weight.router as health_weight_router
+import health.health_steps.router as health_steps_router
+import health.health_targets.router as health_targets_router
 import notifications.router as notifications_router
 import password_reset_tokens.router as password_reset_tokens_router
 import profile.browser_redirect_router as profile_browser_redirect_router
 import profile.router as profile_router
 import server_settings.public_router as server_settings_public_router
 import server_settings.router as server_settings_router
-import session.router as session_router
-import auth.security as auth_security
+import users.users_sessions.router as users_session_router
 import sign_up_tokens.router as sign_up_tokens_router
 import strava.router as strava_router
-import users.user.router as users_router
-import users.user_goals.router as user_goals_router
-import users.user_identity_providers.router as user_identity_providers_router
-import users.user.public_router as users_public_router
-import users.user_default_gear.router as user_default_gear_router
+import users.users.router as users_router
+import users.users_goals.router as user_goals_router
+import users.users_identity_providers.router as user_identity_providers_router
+import users.users.public_router as users_public_router
+import users.users_default_gear.router as user_default_gear_router
 import websocket.router as websocket_router
 
 
@@ -99,7 +99,7 @@ router.include_router(
 )
 router.include_router(
     auth_router.router,
-    prefix=core_config.ROOT_PATH,
+    prefix=core_config.ROOT_PATH + "/auth",
     tags=["auth"],
 )
 router.include_router(
@@ -157,6 +157,7 @@ router.include_router(
     identity_providers_router.router,
     prefix=core_config.ROOT_PATH + "/idp",
     tags=["identity_providers"],
+    dependencies=[Depends(auth_security.validate_access_token)],
 )
 router.include_router(
     notifications_router.router,
@@ -176,10 +177,7 @@ router.include_router(
     profile_browser_redirect_router.router,
     prefix=core_config.ROOT_PATH + "/profile",
     tags=["profile"],
-    dependencies=[
-        Depends(auth_security.validate_access_token_for_browser_redirect),
-        Security(auth_security.check_scopes_for_browser_redirect, scopes=["profile"]),
-    ],
+    # No authentication required - endpoints validate via link_token parameter
 )
 router.include_router(
     profile_router.router,
@@ -197,7 +195,7 @@ router.include_router(
     dependencies=[Depends(auth_security.validate_access_token)],
 )
 router.include_router(
-    session_router.router,
+    users_session_router.router,
     prefix=core_config.ROOT_PATH + "/sessions",
     tags=["sessions"],
     dependencies=[Depends(auth_security.validate_access_token)],
@@ -246,10 +244,6 @@ router.include_router(
     websocket_router.router,
     prefix=core_config.ROOT_PATH + "/ws",
     tags=["websocket"],
-    # dependencies=[
-    #   Depends(auth_security.validate_access_token),
-    #   Security(auth_security.check_scopes, scopes=["profile"]),
-    # ],
 )
 
 # PUBLIC ROUTES (alphabetical order)

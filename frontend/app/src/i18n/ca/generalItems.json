@@ -97,5 +97,11 @@
   "labelHours": "Hores",
   "labelMinutes": "Minuts",
   "labelHoursShort": "h",
-  "labelMinutesShort": "min"
+  "labelMinutesShort": "min",
+  "markdownEditor": {
+    "showPreview": "Previsualitza",
+    "hidePreview": "Edita",
+    "markdownSupported": "S'admet el format de Markdown (negreta, cursiva, enllaços, llistes, etc.)",
+    "noContentToPreview": "Sense contingut a previsualitzar"
+  }
 }

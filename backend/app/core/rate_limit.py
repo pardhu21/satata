@@ -29,8 +29,10 @@ from slowapi import Limiter
 from slowapi.errors import RateLimitExceeded
 from fastapi import Request, Response
 from fastapi.responses import JSONResponse
+
+import users.users_sessions.utils as users_session_utils
+
 import core.logger as core_logger
-import session.utils as session_utils
 
 
 # Predefined rate limit decorators for common use cases
@@ -40,11 +42,21 @@ import session.utils as session_utils
 OAUTH_AUTHORIZE_LIMIT = "10/minute"  # Authorization initiation
 OAUTH_CALLBACK_LIMIT = "10/minute"  # Callback handling after IdP redirect
 OAUTH_DISCONNECT_LIMIT = "5/minute"  # Account disconnection (less frequent)
+PKCE_TOKEN_EXCHANGE_LIMIT = "10/minute"  # Mobile PKCE token exchange
 
 # Session endpoints - stricter protection (potential brute-force target)
-SESSION_LOGIN_LIMIT = "5/minute"  # Login attempts
+SESSION_LOGIN_LIMIT = (
+    "3/minute"  # Login attempts (reduced from 5 to prevent brute-force)
+)
 SESSION_REFRESH_LIMIT = "20/minute"  # Token refresh (more frequent but still limited)
 SESSION_LOGOUT_LIMIT = "10/minute"  # Logout requests
+
+SIGNUP_LIMIT = "5/minute"  # Signup attempts (prevent account creation abuse)
+
+# MFA endpoints - very strict protection (high-value target for brute-force)
+MFA_VERIFY_LIMIT = (
+    "3/minute"  # MFA code verification (AuthQuake-style attack prevention)
+)
 
 # API endpoints - generous limits for normal usage
 API_READ_LIMIT = "60/minute"  # GET requests (read operations)
@@ -58,9 +70,9 @@ ADMIN_LIMIT = "10/minute"  # Administrative operations
 # For production with multiple backend instances, consider using Redis storage:
 # from slowapi.middleware import SlowAPIMiddleware
 # from slowapi import _rate_limit_exceeded_handler
-# limiter = Limiter(key_func=session_utils.get_ip_address, storage_uri="redis://localhost:6379")
+# limiter = Limiter(key_func=users_session_utils.get_ip_address, storage_uri="redis://localhost:6379")
 limiter = Limiter(
-    key_func=session_utils.get_ip_address,
+    key_func=users_session_utils.get_ip_address,
     default_limits=["100/minute"],  # Global default: 100 requests per minute per IP
     storage_uri="memory://",  # In-memory storage (single instance only)
     headers_enabled=True,  # Include rate limit headers in responses
@@ -89,7 +101,7 @@ async def rate_limit_exceeded_handler(
         for monitoring and security purposes. The default retry period is set to 60 seconds.
     """
     # Extract client identifier for logging
-    client_ip = session_utils.get_ip_address(request)
+    client_ip = users_session_utils.get_ip_address(request)
     path = request.url.path
 
     # Log the rate limit violation

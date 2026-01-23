@@ -35,6 +35,7 @@
                   class="form-select"
                   v-model="selectedType"
                   @change="applyFilters"
+                  disabled="true"
                 >
                   <option value="">{{ $t('activitiesView.filterOptionAllTypes') }}</option>
                   <option v-for="(value, key) in activityTypes" :key="key" :value="key">
@@ -179,7 +180,7 @@ function confirmCompare() {
 
 onMounted(async () => {
   await fetchActivityTypes()
-  await updateActivities()
+  await updateActivities(props.activity.activity_type)
 })
 
 watch(nameSearch, performNameSearch, { immediate: false })

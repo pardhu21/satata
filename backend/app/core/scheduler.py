@@ -11,6 +11,12 @@ import password_reset_tokens.utils as password_reset_tokens_utils
 
 import sign_up_tokens.utils as sign_up_tokens_utils
 
+import users.users_sessions.utils as users_session_utils
+
+import users.users_sessions.rotated_refresh_tokens.utils as users_session_rotated_tokens_utils
+
+import auth.oauth_state.utils as oauth_state_utils
+
 import core.logger as core_logger
 
 # scheduler = BackgroundScheduler()
@@ -68,6 +74,30 @@ def start_scheduler():
         60,
         [],
         "delete invalid sign-up tokens from the database",
+    )
+
+    add_scheduler_job(
+        oauth_state_utils.delete_expired_oauth_states_from_db,
+        "interval",
+        5,
+        [],
+        "delete expired OAuth states from the database",
+    )
+
+    add_scheduler_job(
+        users_session_utils.cleanup_idle_sessions,
+        "interval",
+        15,
+        [],
+        "delete expired sessions from the database",
+    )
+
+    add_scheduler_job(
+        users_session_rotated_tokens_utils.cleanup_expired_rotated_tokens,
+        "interval",
+        1,
+        [],
+        "delete expired rotated tokens from the database",
     )
 
 

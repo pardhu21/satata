@@ -4,7 +4,6 @@ import base64
 from enum import Enum
 from typing import Dict, Any
 from datetime import datetime, timedelta, timezone
-import secrets
 import httpx
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status, Request
@@ -24,14 +23,18 @@ import core.cryptography as core_cryptography
 import core.logger as core_logger
 import auth.identity_providers.models as idp_models
 import auth.identity_providers.crud as idp_crud
-import users.user.crud as users_crud
-import users.user.schema as users_schema
-import users.user.models as users_models
-import users.user.utils as users_utils
-import users.user_identity_providers.crud as user_idp_crud
-import users.user_identity_providers.models as user_idp_models
+import users.users.crud as users_crud
+import users.users.schema as users_schema
+import users.users.models as users_models
+import users.users.utils as users_utils
+import users.users_identity_providers.crud as user_idp_crud
+import users.users_identity_providers.models as user_idp_models
+import users.users_identity_providers.utils as user_idp_utils
 import auth.password_hasher as auth_password_hasher
+import auth.oauth_state.models as oauth_state_models
+import auth.oauth_state.crud as oauth_state_crud
 import server_settings.schema as server_settings_schema
+import server_settings.utils as server_settings_utils
 
 
 # Constants for token rotation policy
@@ -664,19 +667,21 @@ class IdentityProviderService:
         request: Request,
         db: Session,
         redirect_path: str | None = None,
+        oauth_state_id: str | None = None,
     ) -> str:
         """
         Initiates the OAuth2/OIDC login process for the given identity provider.
 
         This method prepares the authorization URL for the user to authenticate with the specified
-        identity provider (IdP). It handles endpoint discovery, state and nonce generation for security,
-        and session storage of relevant OAuth parameters.
+        identity provider (IdP). It handles endpoint discovery and authorization URL construction.
+
 
         Args:
             idp (idp_models.IdentityProvider): The identity provider instance containing configuration details.
-            request (Request): The current HTTP request object, used to store session data.
-            db (Session): The database session (not directly used in this method).
+            request (Request): The current HTTP request object.
+            db (Session): The database session.
             redirect_path (str | None): Optional frontend path to redirect to after successful login.
+            oauth_state_id (str | None): Database OAuth state ID (from PKCE flow).
 
         Returns:
             str: The authorization URL to which the user should be redirected to initiate login.
@@ -702,28 +707,24 @@ class IdentityProviderService:
                     detail="Identity provider not properly configured",
                 )
 
-            # Generate state and nonce for security
-            # State includes timestamp for expiry validation (10 minutes)
-            random_state = secrets.token_urlsafe(32)
-            state_data = {
-                "random": random_state,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-                "idp_id": idp.id,
-            }
+            # Retrieve database-backed OAuth state (mandatory for all clients)
+            if not oauth_state_id:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="OAuth state ID is required (PKCE mandatory)",
+                )
 
-            # Add redirect path to state if provided
-            if redirect_path:
-                state_data["redirect"] = redirect_path
+            oauth_state_obj = oauth_state_crud.get_oauth_state_by_id_and_not_used(
+                oauth_state_id, db
+            )
+            if not oauth_state_obj:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="OAuth state not found",
+                )
 
-            # Encode state as base64 JSON for URL safety
-            state = base64.urlsafe_b64encode(json.dumps(state_data).encode()).decode()
-
-            nonce = secrets.token_urlsafe(32)
-
-            # Store in session (using SessionMiddleware)
-            request.session[f"oauth_state_{idp.id}"] = state
-            request.session[f"oauth_nonce_{idp.id}"] = nonce
-            request.session["oauth_idp_id"] = idp.id
+            state = oauth_state_id
+            nonce = oauth_state_obj.nonce
 
             # Build authorization URL
             redirect_uri = self._get_redirect_uri(idp.slug)
@@ -758,32 +759,36 @@ class IdentityProviderService:
         request: Request,
         user_id: int,
         db: Session,
+        oauth_state_id: str | None = None,
     ) -> str:
         """
         Initiates the OAuth/OIDC authorization flow for linking an identity provider to an existing user account.
         This method generates the authorization URL that redirects the user to the identity provider's
-        login page. It creates secure state and nonce tokens to prevent CSRF attacks and stores session
-        data to track the linking operation.
+        login page. Uses database-backed OAuth state for security and replay protection.
+
         Args:
             idp (idp_models.IdentityProvider): The identity provider configuration object containing
                 client credentials, endpoints, and other OAuth/OIDC settings.
             request (Request): The FastAPI request object used to access and store session data.
             user_id (int): The ID of the authenticated user who is linking their account to the
                 identity provider.
-            db (Session): The database session for potential database operations.
+            db (Session): The database session for database operations.
+            oauth_state_id (str | None): Database OAuth state ID (required for secure linking).
+
         Returns:
             str: The authorization URL to redirect the user to for identity provider authentication.
+
         Raises:
             HTTPException:
                 - 500 status code if the identity provider is not properly configured (missing
                   authorization endpoint).
+                - 500 status code if OAuth state ID is missing or invalid.
                 - 500 status code if any unexpected error occurs during the OAuth flow initiation.
+
         Note:
             - If authorization_endpoint is not directly configured, the method attempts OIDC
               discovery using the issuer_url.
-            - State data includes: random token, timestamp, idp_id, mode flag ('link'), and user_id.
-            - State is base64-encoded for URL safety.
-            - Session stores: oauth_state, oauth_nonce, oauth_idp_id, and oauth_link_user_id.
+            - OAuth state is stored in database with user_id to indicate link mode.
         """
         try:
             client_id = self._decrypt_client_id(idp)
@@ -803,26 +808,31 @@ class IdentityProviderService:
                     detail="Identity provider not properly configured",
                 )
 
-            # Generate state and nonce for security
-            # State includes timestamp, mode flag, and user_id for link mode
-            random_state = secrets.token_urlsafe(32)
-            state_data = {
-                "random": random_state,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-                "idp_id": idp.id,
-                "mode": "link",  # Indicates link mode (vs login mode)
-                "user_id": user_id,  # Ensures callback links to correct user
-            }
-            # Encode state as base64 JSON for URL safety
-            state = base64.urlsafe_b64encode(json.dumps(state_data).encode()).decode()
+            # Retrieve database-backed OAuth state (required for link mode)
+            if not oauth_state_id:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="OAuth state ID is required for secure linking",
+                )
 
-            nonce = secrets.token_urlsafe(32)
+            oauth_state_obj = oauth_state_crud.get_oauth_state_by_id_and_not_used(
+                oauth_state_id, db
+            )
+            if not oauth_state_obj:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="OAuth state not found",
+                )
 
-            # Store in session (using SessionMiddleware)
-            request.session[f"oauth_state_{idp.id}"] = state
-            request.session[f"oauth_nonce_{idp.id}"] = nonce
-            request.session["oauth_idp_id"] = idp.id
-            request.session["oauth_link_user_id"] = user_id  # Track linking user
+            # Validate user_id matches (security check for link mode)
+            if oauth_state_obj.user_id != user_id:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="OAuth state user mismatch",
+                )
+
+            state = oauth_state_id
+            nonce = oauth_state_obj.nonce
 
             # Build authorization URL
             redirect_uri = self._get_redirect_uri(idp.slug)
@@ -859,6 +869,7 @@ class IdentityProviderService:
         request: Request,
         password_hasher: auth_password_hasher.PasswordHasher,
         db: Session,
+        oauth_state: oauth_state_models.OAuthState,
     ) -> Dict[str, Any]:
         """
         Handle the OAuth2/OIDC callback from an identity provider.
@@ -869,18 +880,20 @@ class IdentityProviderService:
         Args:
             idp (idp_models.IdentityProvider): The identity provider configuration object.
             code (str): The authorization code returned by the identity provider.
-            state (str): The state parameter for CSRF protection, containing JSON with
-                timestamp, mode, and optional user_id.
-            request (Request): The FastAPI/Starlette request object containing session data.
+            state (str): The state parameter for CSRF protection (database state ID).
+            request (Request): The FastAPI/Starlette request object.
             password_hasher (auth_password_hasher.PasswordHasher): Password hasher instance
                 for user authentication operations.
             db (Session): SQLAlchemy database session.
+            oauth_state (oauth_state_models.OAuthState): Database OAuth state object.
+
         Returns:
             Dict[str, Any]: A dictionary containing:
                 - user: The authenticated or linked user object
                 - token_data: OAuth2 token response (access_token, refresh_token, etc.)
                 - userinfo: User information claims from the identity provider
                 - mode (optional): "link" if this was a link operation (not present for login)
+
         Raises:
             HTTPException: With appropriate status codes for various error conditions:
                 - 400 BAD_REQUEST: Invalid/expired state, missing parameters, user ID mismatch
@@ -889,89 +902,32 @@ class IdentityProviderService:
                 - 500 INTERNAL_SERVER_ERROR: Unexpected errors during authentication
                 - 502 BAD_GATEWAY: IdP communication errors, invalid responses
                 - 504 GATEWAY_TIMEOUT: IdP not responding
+
         Notes:
             - State parameter must be valid and not older than 10 minutes (CSRF protection)
             - In link mode, validates that the IdP account is not already linked to any user
             - In login mode, creates new user accounts if they don't exist (SSO provisioning)
             - Stores IdP tokens securely for future session renewal
             - Performs ID token verification if JWKS URI is available
-            - Cleans up session state data after successful completion
+            - Cleans up OAuth state from database after successful completion
         """
         try:
-            # Verify state with timestamp expiry validation
-            stored_state = request.session.get(f"oauth_state_{idp.id}")
-            if not stored_state or state != stored_state:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Invalid state parameter",
-                )
+            # Use database-backed OAuth state (mandatory for all clients)
+            redirect_path = oauth_state.redirect_path
+            client_type = oauth_state.client_type
 
-            # Decode and validate state timestamp (10-minute expiry)
-            try:
-                state_json = base64.urlsafe_b64decode(state.encode()).decode()
-                state_data = json.loads(state_json)
+            core_logger.print_to_log(
+                f"Using database OAuth state for IdP {idp.name} (client_type={client_type})",
+                "debug",
+            )
 
-                # Validate timestamp exists
-                if "timestamp" not in state_data:
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail="State parameter missing timestamp",
-                    )
-
-                # Parse timestamp and check expiry
-                state_timestamp = datetime.fromisoformat(state_data["timestamp"])
-                now = datetime.now(timezone.utc)
-                age = now - state_timestamp
-
-                # Reject states older than 10 minutes (CSRF protection)
-                if age > timedelta(minutes=10):
-                    core_logger.print_to_log(
-                        f"Expired state detected for IdP {idp.name}: age={age.total_seconds():.1f}s",
-                        "warning",
-                    )
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail="State parameter expired. Please try logging in again.",
-                    )
-
-                core_logger.print_to_log(
-                    f"State validation successful for IdP {idp.name}: age={age.total_seconds():.1f}s",
-                    "debug",
-                )
-
-            except (json.JSONDecodeError, ValueError, KeyError) as err:
-                core_logger.print_to_log(
-                    f"Failed to decode state parameter: {err}", "error", exc=err
-                )
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Invalid state parameter format",
-                ) from err
-
-            # Extract redirect path from state if present
-            redirect_path = state_data.get("redirect")
-
-            # Detect link mode from state data
-            is_link_mode = state_data.get("mode") == "link"
-            link_user_id = None
+            # Detect link mode from OAuth state (user_id indicates authenticated user linking)
+            is_link_mode = oauth_state.user_id is not None
+            link_user_id = oauth_state.user_id
 
             if is_link_mode:
-                # Validate link mode state
-                link_user_id = state_data.get("user_id")
-                session_link_user_id = request.session.get("oauth_link_user_id")
-
-                if not link_user_id or not session_link_user_id:
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail="Invalid link mode state - missing user ID",
-                    )
-
-                if link_user_id != session_link_user_id:
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail="User ID mismatch - possible session hijacking attempt",
-                    )
-
+                # Link mode: OAuth state was created during authenticated linking request
+                # The user_id in oauth_state proves the user initiated this link
                 core_logger.print_to_log(
                     f"Link mode detected for IdP {idp.name}, user_id={link_user_id}",
                     "debug",
@@ -1013,8 +969,8 @@ class IdentityProviderService:
                         exc=err,
                     )
 
-            # Retrieve nonce from session for ID token verification
-            expected_nonce = request.session.get(f"oauth_nonce_{idp.id}")
+            # Retrieve nonce from database state
+            expected_nonce = oauth_state.nonce
 
             # Exchange code for tokens
             redirect_uri = self._get_redirect_uri(idp.slug)
@@ -1138,14 +1094,12 @@ class IdentityProviderService:
                     user_id=link_user_id, idp_id=idp.id, idp_subject=subject, db=db
                 )
 
+                # Update user info if sync is enabled
+                if idp.sync_user_info:
+                    user = await self._update_user_from_idp(user, idp, userinfo, db)
+
                 # Store IdP tokens for future use
                 await self._store_idp_tokens(link_user_id, idp.id, token_response, db)
-
-                # Clean up session data
-                request.session.pop(f"oauth_state_{idp.id}", None)
-                request.session.pop(f"oauth_nonce_{idp.id}", None)
-                request.session.pop("oauth_idp_id", None)
-                request.session.pop("oauth_link_user_id", None)
 
                 core_logger.print_to_log(
                     f"User {user.username} (id={link_user_id}) linked IdP {idp.name} (subject={subject})",
@@ -1159,7 +1113,6 @@ class IdentityProviderService:
                     "userinfo": userinfo,
                     "mode": "link",  # Indicate this was a link operation
                 }
-
             else:
                 # LOGIN MODE: Find or create user and establish session
                 user = await self._find_or_create_user(
@@ -1168,11 +1121,6 @@ class IdentityProviderService:
 
                 # Store IdP tokens for future session renewal
                 await self._store_idp_tokens(user.id, idp.id, token_response, db)
-
-                # Clean up session data after successful authentication
-                request.session.pop(f"oauth_state_{idp.id}", None)
-                request.session.pop(f"oauth_nonce_{idp.id}", None)
-                request.session.pop("oauth_idp_id", None)
 
                 core_logger.print_to_log(
                     f"User {user.username} authenticated via IdP {idp.name}", "info"
@@ -1183,6 +1131,7 @@ class IdentityProviderService:
                     "token_data": token_response,
                     "userinfo": userinfo,
                     "redirect_path": redirect_path,
+                    "client_type": client_type,
                 }
 
         except HTTPException:
@@ -1487,7 +1436,7 @@ class IdentityProviderService:
         userinfo: Dict[str, Any],
         password_hasher: auth_password_hasher.PasswordHasher,
         db: Session,
-    ) -> users_models.User:
+    ) -> users_models.Users:
         """
         Finds an existing user linked to the given identity provider and subject, or creates a new user if allowed.
 
@@ -1504,7 +1453,7 @@ class IdentityProviderService:
             db (Session): Database session.
 
         Returns:
-            users_models.User: The found or newly created user instance.
+            users_models.Users: The found or newly created user instance.
 
         Raises:
             HTTPException: If user creation is disabled for the identity provider and no existing user is found.
@@ -1515,7 +1464,7 @@ class IdentityProviderService:
         )
 
         if link:
-            user = link.user
+            user = link.users
             # Update last login timestamp
             user_idp_crud.update_user_identity_provider_last_login(
                 link.user_id, idp.id, db
@@ -1542,6 +1491,9 @@ class IdentityProviderService:
                     f"Linked existing user {user.username} to IdP {idp.name}", "info"
                 )
 
+                # Update user info if sync is enabled
+                if idp.sync_user_info:
+                    user = await self._update_user_from_idp(user, idp, userinfo, db)
                 return user
 
         # Create new user if auto-creation is enabled
@@ -1564,7 +1516,7 @@ class IdentityProviderService:
         mapped_data: Dict[str, Any],
         password_hasher: auth_password_hasher.PasswordHasher,
         db: Session,
-    ) -> users_models.User:
+    ) -> users_models.Users:
         """
         Creates a new user in the database based on identity provider (IdP) information.
 
@@ -1581,7 +1533,7 @@ class IdentityProviderService:
             db (Session): The database session.
 
         Returns:
-            users_models.User: The newly created user instance.
+            users_models.Users: The newly created user instance.
 
         Raises:
             HTTPException: If user creation fails (e.g., duplicate username/email).
@@ -1596,31 +1548,26 @@ class IdentityProviderService:
             username = f"{base_username}_{str(random.randint(100000, 999999))}"
 
         # Create user signup schema
-        user_signup = users_schema.UserSignup(
+        user_signup = users_schema.UsersSignup(
             username=username,
             email=mapped_data.get("email", f"{username}@sso.local"),
+            city=mapped_data.get("city", None),
+            birthdate=mapped_data.get("birthdate", None),
             name=mapped_data.get("name", username),
             password=random_password,
             preferred_language=users_schema.Language.ENGLISH_USA,
             gender=users_schema.Gender.UNSPECIFIED,
             units=server_settings_schema.Units.METRIC,
+            height=mapped_data.get("height", None),
+            max_heart_rate=mapped_data.get("max_heart_rate", None),
             first_day_of_week=users_schema.WeekDay.MONDAY,
             currency=server_settings_schema.Currency.EURO,
         )
 
-        # Create a mock server settings that bypasses email verification and admin approval
-        # since we trust the IdP for these users
-        mock_server_settings = type(
-            "obj",
-            (object,),
-            {
-                "signup_require_email_verification": False,
-                "signup_require_admin_approval": False,
-            },
-        )()
+        server_settings = server_settings_utils.get_server_settings_or_404(db)
 
         created_user = users_crud.create_signup_user(
-            user_signup, mock_server_settings, password_hasher, db
+            user_signup, server_settings, password_hasher, db
         )
 
         # Create default data for the user
@@ -1639,36 +1586,70 @@ class IdentityProviderService:
 
     async def _update_user_from_idp(
         self,
-        user: users_models.User,
+        user: users_models.Users,
         idp: idp_models.IdentityProvider,
         userinfo: Dict[str, Any],
         db: Session,
-    ) -> users_models.User:
+    ) -> users_models.Users:
         """
         Updates the user's information based on claims received from an identity provider (IdP).
 
+        This method syncs user profile information from the IdP to the local user account when
+        IdP sync is enabled. It performs the following steps:
+        1. Maps claims from IdP userinfo to standard user fields (email, name)
+        2. Validates email changes - checks if new email is already in use by another user
+        3. Skips email updates if conflict detected and logs the issue
+        4. Converts user ORM model to Pydantic schema
+        5. Applies updates and delegates persistence to the CRUD layer
+
         Args:
-            user (users_models.User): The user instance to update.
-            idp (idp_models.IdentityProvider): The identity provider instance.
+            user (users_models.Users): The user ORM instance to update.
+            idp (idp_models.IdentityProvider): The identity provider instance with user_mapping config.
             userinfo (Dict[str, Any]): The user information claims received from the IdP.
-            db (Session): The database session for committing changes.
+            db (Session): The SQLAlchemy database session.
 
         Returns:
-            users_models.User: The updated user instance.
-
-        Side Effects:
-            Commits changes to the database and refreshes the user instance.
+            users_models.Users: The updated user ORM instance from database.
         """
         mapped_data = self._map_user_claims(idp, userinfo)
 
-        # Update allowed fields
-        if "email" in mapped_data and mapped_data["email"] != user.email:
-            user.email = mapped_data["email"]
-        if "name" in mapped_data and mapped_data["name"] != user.name:
-            user.name = mapped_data["name"]
+        # Build updates
+        updates = {}
 
-        db.commit()
-        db.refresh(user)
+        # Check email - verify not already in use
+        if "email" in mapped_data and mapped_data["email"] != user.email:
+            existing_user = users_crud.get_user_by_email(mapped_data["email"], db)
+            if existing_user and existing_user.id != user.id:
+                core_logger.print_to_log(
+                    f"Cannot sync email from IdP {idp.name}: "
+                    f"{mapped_data['email']} already in use by another user",
+                    "warning",
+                )
+            else:
+                core_logger.print_to_log(
+                    f"Syncing email for user {user.username} from IdP {idp.name}: "
+                    f"{user.email} -> {mapped_data['email']}",
+                    "debug",
+                )
+                updates["email"] = mapped_data["email"].strip()
+
+        # Check name
+        if "name" in mapped_data and mapped_data["name"] != user.name:
+            core_logger.print_to_log(
+                f"Syncing name for user {user.username} from IdP {idp.name}: "
+                f"{user.name} -> {mapped_data['name']}",
+                "debug",
+            )
+            updates["name"] = mapped_data["name"].strip()
+
+        # Only call CRUD if there are updates
+        if updates:
+            print("Applying updates to user:", updates)
+            user_read = users_schema.UsersRead.model_validate(user)
+            for field, value in updates.items():
+                setattr(user_read, field, value)
+
+            user = await users_crud.edit_user(user.id, user_read, db)
 
         return user
 
@@ -1720,7 +1701,7 @@ class IdentityProviderService:
             )
 
         # Get the encrypted refresh token from database
-        encrypted_refresh_token = user_idp_crud.get_user_identity_provider_refresh_token_by_user_id_and_idp_id(
+        encrypted_refresh_token = user_idp_utils.get_user_identity_provider_refresh_token_by_user_id_and_idp_id(
             user_id, idp_id, db
         )
 
@@ -1887,7 +1868,7 @@ class IdentityProviderService:
                 return False
 
             # Get the encrypted refresh token from database
-            encrypted_refresh_token = user_idp_crud.get_user_identity_provider_refresh_token_by_user_id_and_idp_id(
+            encrypted_refresh_token = user_idp_utils.get_user_identity_provider_refresh_token_by_user_id_and_idp_id(
                 user_id, idp_id, db
             )
 
@@ -2016,7 +1997,7 @@ class IdentityProviderService:
             return False
 
     def _is_token_expired_by_age(
-        self, link: user_idp_models.UserIdentityProvider
+        self, link: user_idp_models.UsersIdentityProvider
     ) -> bool:
         """
         Check if an IdP refresh token has exceeded the maximum age policy.
@@ -2026,7 +2007,7 @@ class IdentityProviderService:
         configured maximum age.
 
         Args:
-            link (user_idp_models.UserIdentityProvider): The user-IdP link containing token metadata.
+            link (user_idp_models.UsersIdentityProvider): The user-IdP link containing token metadata.
 
         Returns:
             bool: True if the token exceeds maximum age, False otherwise.
@@ -2061,15 +2042,16 @@ class IdentityProviderService:
             )
             return False
 
-        # Calculate token age
-        token_age = now - token_timestamp
+        # Calculate token age (ensure timezone-aware comparison - DB stores naive UTC)
+        token_timestamp_aware = token_timestamp.replace(tzinfo=timezone.utc)
+        token_age = now - token_timestamp_aware
 
         # Check if token exceeds maximum age
         max_age = timedelta(days=MAX_IDP_TOKEN_AGE_DAYS)
         return token_age > max_age
 
     def _should_refresh_idp_token(
-        self, link: user_idp_models.UserIdentityProvider
+        self, link: user_idp_models.UsersIdentityProvider
     ) -> TokenAction:
         """
         Determine what action to take for an IdP token based on expiry and age policies.
@@ -2081,7 +2063,7 @@ class IdentityProviderService:
         4. Rate limiting - whether the token was refreshed very recently
 
         Args:
-            link (user_idp_models.UserIdentityProvider): The user-IdP link containing token metadata.
+            link (user_idp_models.UsersIdentityProvider): The user-IdP link containing token metadata.
 
         Returns:
             TokenAction: The action to take (SKIP, REFRESH, or CLEAR).
@@ -2124,13 +2106,19 @@ class IdentityProviderService:
 
         # Check if token was refreshed very recently (rate limiting)
         if link.idp_refresh_token_updated_at:
-            time_since_refresh = now - link.idp_refresh_token_updated_at
+            # Ensure timezone-aware comparison (DB stores naive UTC datetimes)
+            updated_at_aware = link.idp_refresh_token_updated_at.replace(
+                tzinfo=timezone.utc
+            )
+            time_since_refresh = now - updated_at_aware
             if time_since_refresh < timedelta(minutes=TOKEN_REFRESH_RATE_LIMIT_MINUTES):
                 # Refreshed less than defined - don't refresh again
                 return TokenAction.SKIP
 
         # Check if access token is close to expiry
-        time_until_expiry = link.idp_access_token_expires_at - now
+        # Ensure timezone-aware comparison (DB stores naive UTC datetimes)
+        expires_at_aware = link.idp_access_token_expires_at.replace(tzinfo=timezone.utc)
+        time_until_expiry = expires_at_aware - now
         if time_until_expiry < timedelta(minutes=TOKEN_EXPIRY_THRESHOLD_MINUTES):
             # Token expires soon - should refresh
             return TokenAction.REFRESH

@@ -8,13 +8,13 @@ from sqlalchemy.orm import Session
 import followers.schema as followers_schema
 import followers.crud as followers_crud
 
-import users.user.dependencies as users_dependencies
+import users.users.dependencies as users_dependencies
 
 import auth.security as auth_security
 
 import core.database as core_database
 
-import websocket.schema as websocket_schema
+import websocket.manager as websocket_manager
 
 # Define the API router
 router = APIRouter()
@@ -207,8 +207,8 @@ async def create_follow(
         Callable, Security(auth_security.check_scopes, scopes=["profile"])
     ],
     websocket_manager: Annotated[
-        websocket_schema.WebSocketManager,
-        Depends(websocket_schema.get_websocket_manager),
+        websocket_manager.WebSocketManager,
+        Depends(websocket_manager.get_websocket_manager),
     ],
     db: Annotated[
         Session,
@@ -239,8 +239,8 @@ async def accept_follow(
         Callable, Security(auth_security.check_scopes, scopes=["profile"])
     ],
     websocket_manager: Annotated[
-        websocket_schema.WebSocketManager,
-        Depends(websocket_schema.get_websocket_manager),
+        websocket_manager.WebSocketManager,
+        Depends(websocket_manager.get_websocket_manager),
     ],
     db: Annotated[
         Session,

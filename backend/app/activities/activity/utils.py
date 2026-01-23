@@ -23,10 +23,10 @@ import activities.activity.schema as activities_schema
 import activities.activity.crud as activities_crud
 import activities.activity.models as activities_models
 
-import users.user.crud as users_crud
+import users.users.crud as users_crud
 
-import users.user_privacy_settings.crud as users_privacy_settings_crud
-import users.user_privacy_settings.schema as users_privacy_settings_schema
+import users.users_privacy_settings.crud as users_privacy_settings_crud
+import users.users_privacy_settings.models as users_privacy_settings_models
 
 import activities.activity_laps.crud as activity_laps_crud
 
@@ -37,7 +37,7 @@ import activities.activity_streams.schema as activity_streams_schema
 
 import activities.activity_workout_steps.crud as activity_workout_steps_crud
 
-import websocket.schema as websocket_schema
+import websocket.manager as websocket_manager
 
 import gpx.utils as gpx_utils
 import tcx.utils as tcx_utils
@@ -46,6 +46,7 @@ import fit.utils as fit_utils
 import core.logger as core_logger
 import core.config as core_config
 import core.database as core_database
+import core.sanitization as core_sanitization
 
 # Global Activity Type Mappings (ID to Name)
 ACTIVITY_ID_TO_NAME = {
@@ -94,6 +95,7 @@ ACTIVITY_ID_TO_NAME = {
     43: "Sailing",
     44: "Snow shoeing",
     45: "Inline skating",
+    46: "HIIT",
     # Add other mappings as needed based on the full list in define_activity_type comments if required
     # "AlpineSki",
     # "BackcountrySki",
@@ -195,6 +197,7 @@ ACTIVITY_NAME_TO_ID.update(
         "pickleball": 26,
         "commuting_ride": 27,
         "indoor_ride": 28,
+        "indoor_cycling": 28,
         "mixed_surface_ride": 29,
         "windsurf": 30,
         "windsurfing": 30,
@@ -209,6 +212,7 @@ ACTIVITY_NAME_TO_ID.update(
         "e_bike": 35,
         "ebike": 35,
         "e_bike_ride": 35,
+        "e_bike_fitness": 35,
         "emountainbikeride": 36,
         "e_bike_mountain": 36,
         "ebikemountain": 36,
@@ -228,6 +232,9 @@ ACTIVITY_NAME_TO_ID.update(
         "snowshoe": 44,
         "inline_skating": 45,
         "inlineskate": 45,
+        "hiit": 46,
+        "high_intensity_interval_training": 46,
+        "highintensityintervaltraining": 46,
     }
 )
 
@@ -242,11 +249,17 @@ def transform_schema_activity_to_model_activity(
     if activity.created_at is not None:
         created_date = activity.created_at
 
+    # Sanitize markdown fields to prevent XSS
+    sanitized_description = core_sanitization.sanitize_markdown(activity.description)
+    sanitized_private_notes = core_sanitization.sanitize_markdown(
+        activity.private_notes
+    )
+
     # Create a new activity object
     new_activity = activities_models.Activity(
         user_id=activity.user_id,
-        description=activity.description,
-        private_notes=activity.private_notes,
+        description=sanitized_description,
+        private_notes=sanitized_private_notes,
         distance=activity.distance,
         name=activity.name,
         activity_type=activity.activity_type,
@@ -376,7 +389,7 @@ def handle_gzipped_file(
 async def parse_and_store_activity_from_file(
     token_user_id: int,
     file_path: str,
-    websocket_manager: websocket_schema.WebSocketManager,
+    websocket_manager: websocket_manager.WebSocketManager,
     db: Session,
     from_garmin: bool = False,
     garminconnect_gear: dict | None = None,
@@ -527,7 +540,7 @@ async def parse_and_store_activity_from_file(
 async def parse_and_store_activity_from_uploaded_file(
     token_user_id: int,
     file: UploadFile,
-    websocket_manager: websocket_schema.WebSocketManager,
+    websocket_manager: websocket_manager.WebSocketManager,
     db: Session,
 ):
     # Validate filename exists
@@ -677,7 +690,7 @@ def move_file(new_dir: str, new_filename: str, file_path: str):
 
 def parse_file(
     token_user_id: int,
-    user_privacy_settings: users_privacy_settings_schema.UsersPrivacySettings,
+    user_privacy_settings: users_privacy_settings_models.UsersPrivacySettings,
     file_extension: str,
     filename: str,
     db: Session,
@@ -729,7 +742,9 @@ def parse_file(
 
 
 async def store_activity(
-    parsed_info: dict, websocket_manager: websocket_schema.WebSocketManager, db: Session
+    parsed_info: dict,
+    websocket_manager: websocket_manager.WebSocketManager,
+    db: Session,
 ):
     # create the activity in the database
     created_activity = await activities_crud.create_activity(
@@ -1180,7 +1195,7 @@ def set_activity_name_based_on_activity_type(activity_type_id: int) -> str:
 def process_all_files_sync(
     user_id: int,
     file_paths: list[str],
-    websocket_manager: websocket_schema.WebSocketManager,
+    websocket_manager: websocket_manager.WebSocketManager,
 ):
     """
     Process all files sequentially in single thread.

@@ -8,7 +8,7 @@ from stravalib.exc import AccessUnauthorized
 
 import auth.security as auth_security
 
-import users.user_integrations.crud as user_integrations_crud
+import users.users_integrations.crud as user_integrations_crud
 
 import gears.gear.crud as gears_crud
 
@@ -25,7 +25,7 @@ import core.cryptography as core_cryptography
 import core.logger as core_logger
 import core.database as core_database
 
-import websocket.schema as websocket_schema
+import websocket.manager as websocket_manager
 
 # Define the API router
 router = APIRouter()
@@ -121,8 +121,8 @@ async def strava_retrieve_activities_days(
         Depends(auth_security.get_sub_from_access_token),
     ],
     websocket_manager: Annotated[
-        websocket_schema.WebSocketManager,
-        Depends(websocket_schema.get_websocket_manager),
+        websocket_manager.WebSocketManager,
+        Depends(websocket_manager.get_websocket_manager),
     ],
     # db: Annotated[Session, Depends(core_database.get_db)],
     background_tasks: BackgroundTasks,
@@ -134,7 +134,7 @@ async def strava_retrieve_activities_days(
 
     # Process strava activities in the background
     background_tasks.add_task(
-        strava_activity_utils.get_user_garminconnect_activities_by_dates,
+        strava_activity_utils.get_user_strava_activities_by_dates,
         start_datetime,
         end_datetime,
         token_user_id,

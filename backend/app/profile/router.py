@@ -1,40 +1,73 @@
+"""Profile API endpoints for user management and operations.
+
+This module provides FastAPI endpoints for:
+- User profile retrieval and updates
+- Password and privacy settings management
+- MFA (Multi-Factor Authentication) operations
+- Profile photo upload and deletion
+- Session management
+- Identity provider linking and unlinking
+- Profile data export and import
+"""
+
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile
+from datetime import datetime, timezone
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+    status,
+    UploadFile,
+    Response,
+    Request,
+)
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from safeuploads import FileValidator, FileSecurityConfig, SecurityLimits
 from safeuploads.exceptions import FileValidationError
 
-import users.user.schema as users_schema
-import users.user.crud as users_crud
-import users.user.utils as users_utils
+import users.users.schema as users_schema
+import users.users.crud as users_crud
+import users.users.utils as users_utils
 
-import users.user_identity_providers.crud as user_idp_crud
-import users.user_identity_providers.schema as user_idp_schema
+import users.users_identity_providers.crud as user_idp_crud
+import users.users_identity_providers.schema as user_idp_schema
+import users.users_identity_providers.utils as user_idp_utils
+
+import auth.password_hasher as auth_password_hasher
 
 import auth.identity_providers.crud as idp_crud
+import auth.idp_link_tokens.utils as idp_link_token_utils
+import auth.idp_link_tokens.schema as idp_link_token_schema
 
-import users.user_integrations.crud as user_integrations_crud
+import users.users_integrations.crud as user_integrations_crud
 
-import users.user_privacy_settings.crud as users_privacy_settings_crud
-import users.user_privacy_settings.schema as users_privacy_settings_schema
+import users.users_privacy_settings.crud as users_privacy_settings_crud
+import users.users_privacy_settings.schema as users_privacy_settings_schema
 
 import profile.utils as profile_utils
 import profile.schema as profile_schema
 import profile.export_service as profile_export_service
 import profile.import_service as profile_import_service
 import profile.exceptions as profile_exceptions
+import profile.mfa_store as profile_mfa_store
 
 import auth.security as auth_security
-import session.crud as session_crud
-import auth.password_hasher as auth_password_hasher
+
+import auth.mfa_backup_codes.schema as mfa_backup_codes_schema
+import auth.mfa_backup_codes.crud as mfa_backup_codes_crud
+
+import users.users_sessions.crud as users_session_crud
+import users.users_sessions.schema as users_session_schema
 
 import core.database as core_database
 import core.logger as core_logger
+import core.rate_limit as core_rate_limit
+import core.config as core_config
 
-import websocket.schema as websocket_schema
+import websocket.manager as websocket_manager
 
 # Define the API router
 router = APIRouter()
@@ -50,7 +83,7 @@ custom_config.limits = custom_limits
 file_validator = FileValidator(config=custom_config)
 
 
-@router.get("", response_model=users_schema.UserMe)
+@router.get("", status_code=status.HTTP_200_OK, response_model=users_schema.UsersMe)
 async def read_users_me(
     token_user_id: Annotated[
         int,
@@ -60,7 +93,7 @@ async def read_users_me(
         Session,
         Depends(core_database.get_db),
     ],
-):
+) -> users_schema.UsersMe:
     """
     Retrieve authenticated user profile with integrations.
 
@@ -96,9 +129,6 @@ async def read_users_me(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    user.is_strava_linked = 1 if user_integrations.strava_token else 0
-    user.is_garminconnect_linked = 1 if user_integrations.garminconnect_oauth1 else 0
-
     user_privacy_settings = (
         users_privacy_settings_crud.get_user_privacy_settings_by_user_id(user.id, db)
     )
@@ -109,16 +139,45 @@ async def read_users_me(
             detail="Could not validate credentials (user privacy settings not found)",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    else:
-        for attr in vars(user_privacy_settings):
-            if not attr.startswith("_") and attr != "id" and attr != "user_id":
-                setattr(user, attr, getattr(user_privacy_settings, attr))
 
-    # Return the user
-    return user
+    # Build UsersMe schema from model using model_validate
+    user_me = users_schema.UsersMe.model_validate(user)
+
+    # Update with integration and privacy settings
+    return user_me.model_copy(
+        update={
+            "is_strava_linked": (1 if user_integrations.strava_token else 0),
+            "is_garminconnect_linked": (
+                1 if user_integrations.garminconnect_oauth1 else 0
+            ),
+            "default_activity_visibility": (
+                user_privacy_settings.default_activity_visibility
+            ),
+            "hide_activity_start_time": (
+                user_privacy_settings.hide_activity_start_time
+            ),
+            "hide_activity_location": (user_privacy_settings.hide_activity_location),
+            "hide_activity_map": (user_privacy_settings.hide_activity_map),
+            "hide_activity_hr": user_privacy_settings.hide_activity_hr,
+            "hide_activity_power": (user_privacy_settings.hide_activity_power),
+            "hide_activity_cadence": (user_privacy_settings.hide_activity_cadence),
+            "hide_activity_elevation": (user_privacy_settings.hide_activity_elevation),
+            "hide_activity_speed": (user_privacy_settings.hide_activity_speed),
+            "hide_activity_pace": (user_privacy_settings.hide_activity_pace),
+            "hide_activity_laps": (user_privacy_settings.hide_activity_laps),
+            "hide_activity_workout_sets_steps": (
+                user_privacy_settings.hide_activity_workout_sets_steps
+            ),
+            "hide_activity_gear": (user_privacy_settings.hide_activity_gear),
+        }
+    )
 
 
-@router.get("/sessions")
+@router.get(
+    "/sessions",
+    status_code=status.HTTP_200_OK,
+    response_model=list[users_session_schema.UsersSessionsRead],
+)
 async def read_sessions_me(
     token_user_id: Annotated[
         int,
@@ -128,7 +187,7 @@ async def read_sessions_me(
         Session,
         Depends(core_database.get_db),
     ],
-):
+) -> list[users_session_schema.UsersSessionsRead]:
     """
     Retrieve all sessions for authenticated user.
 
@@ -140,13 +199,101 @@ async def read_sessions_me(
         List of session objects for the user.
     """
     # Get the sessions from the database
-    return session_crud.get_user_sessions(token_user_id, db)
+    if core_config.ENVIRONMENT != "demo":
+        return users_session_crud.get_user_sessions(token_user_id, db)
+    else:
+        core_logger.print_to_log(
+            "Session retrieval attempted in demo environment - returning empty list",
+            "info",
+        )
+        return []
+
+
+@core_rate_limit.limiter.limit(core_rate_limit.OAUTH_DISCONNECT_LIMIT)
+@router.post(
+    "/idp/{idp_id}/link/token",
+    status_code=status.HTTP_201_CREATED,
+    response_model=idp_link_token_schema.IdpLinkTokenResponse,
+)
+async def generate_link_token(
+    idp_id: int,
+    request: Request,
+    token_user_id: Annotated[
+        int,
+        Depends(auth_security.get_sub_from_access_token),
+    ],
+    db: Annotated[
+        Session,
+        Depends(core_database.get_db),
+    ],
+) -> idp_link_token_schema.IdpLinkTokenResponse:
+    """
+    Generate a one-time token for linking an identity provider.
+
+    This endpoint creates a short-lived (60 seconds), single-use token
+    that can be used to securely initiate the OAuth flow for linking
+    an identity provider to the authenticated user's account.
+
+    This approach is more secure than passing access tokens in query
+    parameters, as the link token:
+    - Expires in 60 seconds
+    - Can only be used once
+    - Is scoped specifically for IdP linking
+    - Limits exposure in server logs and browser history
+
+    Args:
+        idp_id (int): The ID of the identity provider to link.
+        request (Request): The FastAPI request object.
+        token_user_id (int): The authenticated user's ID extracted from the access token.
+        db (Session): The database session.
+
+    Returns:
+        IdpLinkTokenResponse: Contains the one-time token and expiration time.
+
+    Raises:
+        HTTPException:
+            - 404 NOT_FOUND: If the identity provider doesn't exist or is disabled.
+            - 409 CONFLICT: If the identity provider is already linked.
+            - 500 INTERNAL_SERVER_ERROR: If token generation fails.
+    """
+    # Validate IDP exists and is enabled
+    idp = idp_crud.get_identity_provider(idp_id, db)
+    if not idp or not idp.enabled:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Identity provider not found or disabled",
+        )
+
+    # Check if already linked
+    existing_link = user_idp_crud.get_user_identity_provider_by_user_id_and_idp_id(
+        token_user_id, idp_id, db
+    )
+    if existing_link:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Identity provider {idp.name} is already linked to your account",
+        )
+
+    # Get client IP address
+    ip_address = request.client.host if request.client else None
+
+    # Generate one-time link token
+    link_token = idp_link_token_utils.generate_idp_link_token(
+        user_id=token_user_id, idp_id=idp_id, ip_address=ip_address, db=db
+    )
+
+    core_logger.print_to_log(
+        f"Generated link token for user {token_user_id}, idp_id={idp_id} ({idp.name})",
+        "debug",
+    )
+
+    return link_token
 
 
 @router.post(
     "/image",
-    status_code=201,
-    response_model=str | None,
+    status_code=status.HTTP_201_CREATED,
+    response_model=str,
 )
 async def upload_profile_image(
     file: UploadFile,
@@ -158,7 +305,7 @@ async def upload_profile_image(
         Session,
         Depends(core_database.get_db),
     ],
-):
+) -> str:
     """
     Upload user profile image with security validation.
 
@@ -173,21 +320,12 @@ async def upload_profile_image(
     Raises:
         HTTPException: If validation or save fails.
     """
-    # Comprehensive security validation
-    try:
-        await file_validator.validate_image_file(file)
-    except FileValidationError as err:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(err)
-        ) from err
-
-    # If validation passes, proceed with saving
-    return await users_utils.save_user_image(token_user_id, file, db)
+    return await users_utils.save_user_image_file(token_user_id, file, db)
 
 
-@router.put("")
+@router.put("", status_code=status.HTTP_200_OK, response_model=dict)
 async def edit_user(
-    user_attributtes: users_schema.UserRead,
+    user_attributtes: users_schema.UsersRead,
     token_user_id: Annotated[
         int,
         Depends(auth_security.get_sub_from_access_token),
@@ -196,7 +334,7 @@ async def edit_user(
         Session,
         Depends(core_database.get_db),
     ],
-):
+) -> dict:
     """
     Edit user attributes in database.
 
@@ -209,15 +347,15 @@ async def edit_user(
         Success message with user ID.
     """
     # Update the user in the database
-    users_crud.edit_user(token_user_id, user_attributtes, db)
+    await users_crud.edit_user(token_user_id, user_attributtes, db)
 
     # Return success message
-    return {"detail": f"User ID {user_attributtes.id} updated successfully"}
+    return {"message": f"User ID {user_attributtes.id} updated successfully"}
 
 
-@router.put("/privacy")
+@router.put("/privacy", status_code=status.HTTP_200_OK, response_model=dict)
 async def edit_profile_privacy_settings(
-    user_privacy_settings: users_privacy_settings_schema.UsersPrivacySettings,
+    user_privacy_settings: users_privacy_settings_schema.UsersPrivacySettingsUpdate,
     token_user_id: Annotated[
         int,
         Depends(auth_security.get_sub_from_access_token),
@@ -226,7 +364,7 @@ async def edit_profile_privacy_settings(
         Session,
         Depends(core_database.get_db),
     ],
-):
+) -> dict:
     """
     Edit privacy settings for authenticated user.
 
@@ -244,12 +382,12 @@ async def edit_profile_privacy_settings(
     )
 
     # Return success message
-    return {f"User ID {token_user_id} privacy settings updated successfully"}
+    return {"message": f"User ID {token_user_id} privacy settings updated successfully"}
 
 
-@router.put("/password")
+@router.put("/password", status_code=status.HTTP_200_OK, response_model=dict)
 async def edit_profile_password(
-    user_attributtes: users_schema.UserEditPassword,
+    user_attributtes: users_schema.UsersEditPassword,
     token_user_id: Annotated[
         int,
         Depends(auth_security.get_sub_from_access_token),
@@ -262,12 +400,12 @@ async def edit_profile_password(
         Session,
         Depends(core_database.get_db),
     ],
-):
+) -> dict:
     """
     Update user password after validation.
 
     Args:
-        user_attributtes (users_schema.UserEditPassword): Schema containing the new password.
+        user_attributtes (users_schema.UsersEditPassword): Schema containing the new password.
         token_user_id (int): ID of the user extracted from the access token.
         password_hasher (auth_password_hasher.PasswordHasher): Password hasher dependency.
         db (Session): Database session dependency.
@@ -281,10 +419,10 @@ async def edit_profile_password(
     )
 
     # Return success message
-    return {f"User ID {token_user_id} password updated successfully"}
+    return {"message": f"User ID {token_user_id} password updated successfully"}
 
 
-@router.put("/photo")
+@router.put("/photo", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 async def delete_profile_photo(
     token_user_id: Annotated[
         int,
@@ -294,7 +432,7 @@ async def delete_profile_photo(
         Session,
         Depends(core_database.get_db),
     ],
-):
+) -> None:
     """
     Delete authenticated user's profile photo.
 
@@ -306,13 +444,14 @@ async def delete_profile_photo(
         Success message.
     """
     # Update the user photo_path in the database
-    users_crud.delete_user_photo(token_user_id, db)
-
-    # Return success message
-    return f"User ID {token_user_id} photo deleted successfully"
+    await users_crud.update_user_photo(token_user_id, db)
 
 
-@router.delete("/sessions/{session_id}")
+@router.delete(
+    "/sessions/{session_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
+)
 async def delete_profile_session(
     session_id: str,
     token_user_id: Annotated[
@@ -323,7 +462,7 @@ async def delete_profile_session(
         Session,
         Depends(core_database.get_db),
     ],
-):
+) -> None:
     """
     Delete user session from database.
 
@@ -333,16 +472,16 @@ async def delete_profile_session(
         db: Database session.
 
     Returns:
-        Result of deletion operation.
+        None.
     """
     # Delete the session from the database
-    return session_crud.delete_session(session_id, token_user_id, db)
+    users_session_crud.delete_session(session_id, token_user_id, db)
 
 
 # Import/export logic
 
 
-@router.get("/export")
+@router.get("/export", status_code=status.HTTP_200_OK, response_class=StreamingResponse)
 async def export_profile_data(
     token_user_id: Annotated[
         int,
@@ -352,7 +491,7 @@ async def export_profile_data(
         Session,
         Depends(core_database.get_db),
     ],
-):
+) -> StreamingResponse:
     """
     Export all profile data as ZIP archive.
 
@@ -427,7 +566,7 @@ async def export_profile_data(
         ) from err
 
 
-@router.post("/import")
+@router.post("/import", status_code=status.HTTP_201_CREATED, response_model=dict)
 async def import_profile_data(
     file: UploadFile,
     token_user_id: Annotated[
@@ -436,10 +575,10 @@ async def import_profile_data(
     ],
     db: Annotated[Session, Depends(core_database.get_db)],
     websocket_manager: Annotated[
-        websocket_schema.WebSocketManager,
-        Depends(websocket_schema.get_websocket_manager),
+        websocket_manager.WebSocketManager,
+        Depends(websocket_manager.get_websocket_manager),
     ],
-):
+) -> dict:
     """
     Import profile data from ZIP with security validation.
 
@@ -564,14 +703,18 @@ async def import_profile_data(
 
 
 # MFA logic
-@router.get("/mfa/status", response_model=profile_schema.MFAStatusResponse)
+@router.get(
+    "/mfa/status",
+    status_code=status.HTTP_200_OK,
+    response_model=profile_schema.MFAStatusResponse,
+)
 async def get_mfa_status(
     token_user_id: Annotated[
         int,
         Depends(auth_security.get_sub_from_access_token),
     ],
     db: Annotated[Session, Depends(core_database.get_db)],
-):
+) -> profile_schema.MFAStatusResponse:
     """
     Return MFA enabled status for authenticated user.
 
@@ -586,7 +729,60 @@ async def get_mfa_status(
     return profile_schema.MFAStatusResponse(mfa_enabled=is_enabled)
 
 
-@router.post("/mfa/setup", response_model=profile_schema.MFASetupResponse)
+@router.get(
+    "/mfa/backup-codes/status",
+    status_code=status.HTTP_200_OK,
+    response_model=mfa_backup_codes_schema.MFABackupCodeStatus,
+)
+async def get_backup_code_status(
+    token_user_id: Annotated[
+        int,
+        Depends(auth_security.get_sub_from_access_token),
+    ],
+    db: Annotated[
+        Session,
+        Depends(core_database.get_db),
+    ],
+) -> mfa_backup_codes_schema.MFABackupCodeStatus:
+    """
+    Retrieve MFA backup code status for authenticated user.
+
+    Args:
+        token_user_id: User ID from access token.
+        db: Database session.
+
+    Returns:
+        Backup code status with counts and creation date.
+    """
+    codes = mfa_backup_codes_crud.get_user_backup_codes(token_user_id, db)
+
+    if not codes:
+        return mfa_backup_codes_schema.MFABackupCodeStatus(
+            has_codes=False,
+            total=0,
+            unused=0,
+            used=0,
+            created_at=None,
+        )
+
+    unused = sum(1 for code in codes if not code.used)
+    used = sum(1 for code in codes if code.used)
+    created_at = codes[0].created_at if codes else None
+
+    return mfa_backup_codes_schema.MFABackupCodeStatus(
+        has_codes=True,
+        total=len(codes),
+        unused=unused,
+        used=used,
+        created_at=created_at,
+    )
+
+
+@router.post(
+    "/mfa/setup",
+    status_code=status.HTTP_201_CREATED,
+    response_model=profile_schema.MFASetupResponse,
+)
 async def setup_mfa(
     token_user_id: Annotated[
         int,
@@ -594,9 +790,10 @@ async def setup_mfa(
     ],
     db: Annotated[Session, Depends(core_database.get_db)],
     mfa_secret_store: Annotated[
-        profile_schema.MFASecretStore, Depends(profile_schema.get_mfa_secret_store)
+        profile_mfa_store.MFASecretStore,
+        Depends(profile_mfa_store.get_mfa_secret_store),
     ],
-):
+) -> profile_schema.MFASetupResponse:
     """
     Initiate MFA setup for authenticated user.
 
@@ -616,24 +813,30 @@ async def setup_mfa(
     return response
 
 
-@router.post("/mfa/enable")
+@router.put("/mfa/enable", status_code=status.HTTP_200_OK, response_model=dict)
 async def enable_mfa(
     request: profile_schema.MFASetupRequest,
     token_user_id: Annotated[
         int,
         Depends(auth_security.get_sub_from_access_token),
     ],
+    password_hasher: Annotated[
+        auth_password_hasher.PasswordHasher,
+        Depends(auth_password_hasher.get_password_hasher),
+    ],
     db: Annotated[Session, Depends(core_database.get_db)],
     mfa_secret_store: Annotated[
-        profile_schema.MFASecretStore, Depends(profile_schema.get_mfa_secret_store)
+        profile_mfa_store.MFASecretStore,
+        Depends(profile_mfa_store.get_mfa_secret_store),
     ],
-):
+) -> dict:
     """
     Enable MFA for authenticated user.
 
     Args:
         request: MFA setup request with code.
         token_user_id: User ID from access token.
+        password_hasher: Password hasher instance for backup code generation.
         db: Database session.
         mfa_secret_store: Temporary secret storage.
 
@@ -652,25 +855,30 @@ async def enable_mfa(
         )
 
     try:
-        profile_utils.enable_user_mfa(token_user_id, secret, request.mfa_code, db)
+        backup_codes = profile_utils.enable_user_mfa(
+            token_user_id, secret, request.mfa_code, password_hasher, db
+        )
         # Clean up the temporary secret
         mfa_secret_store.delete_secret(token_user_id)
-        return {"message": "MFA enabled successfully"}
+        return {
+            "message": "MFA enabled successfully",
+            "backup_codes": backup_codes,
+        }
     except HTTPException:
         # Clean up on error
         mfa_secret_store.delete_secret(token_user_id)
         raise
 
 
-@router.post("/mfa/disable")
+@router.put("/mfa/disable", status_code=status.HTTP_200_OK, response_model=dict)
 async def disable_mfa(
-    request: profile_schema.MFADisableRequest,
+    request: profile_schema.MFARequest,
     token_user_id: Annotated[
         int,
         Depends(auth_security.get_sub_from_access_token),
     ],
     db: Annotated[Session, Depends(core_database.get_db)],
-):
+) -> dict:
     """
     Disable MFA for authenticated user.
 
@@ -686,21 +894,26 @@ async def disable_mfa(
     return {"message": "MFA disabled successfully"}
 
 
-@router.post("/mfa/verify")
+@router.post("/mfa/verify", status_code=status.HTTP_200_OK, response_model=dict)
 async def verify_mfa(
     request: profile_schema.MFARequest,
     token_user_id: Annotated[
         int,
         Depends(auth_security.get_sub_from_access_token),
     ],
+    password_hasher: Annotated[
+        auth_password_hasher.PasswordHasher,
+        Depends(auth_password_hasher.get_password_hasher),
+    ],
     db: Annotated[Session, Depends(core_database.get_db)],
-):
+) -> dict:
     """
     Verify MFA code for authenticated user.
 
     Args:
         request: MFA request with code to verify.
         token_user_id: User ID from access token.
+        password_hasher: Password hasher instance for backup code verification.
         db: Database session.
 
     Returns:
@@ -709,7 +922,9 @@ async def verify_mfa(
     Raises:
         HTTPException: If MFA code is invalid.
     """
-    is_valid = profile_utils.verify_user_mfa(token_user_id, request.mfa_code, db)
+    is_valid = profile_utils.verify_user_mfa(
+        token_user_id, request.mfa_code, password_hasher, db
+    )
     if not is_valid:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid MFA code"
@@ -717,11 +932,76 @@ async def verify_mfa(
     return {"message": "MFA code verified successfully"}
 
 
+@router.post(
+    "/mfa/backup-codes",
+    status_code=status.HTTP_201_CREATED,
+    response_model=mfa_backup_codes_schema.MFABackupCodesResponse,
+)
+@core_rate_limit.limiter.limit(core_rate_limit.MFA_VERIFY_LIMIT)
+async def generate_mfa_backup_codes(
+    response: Response,
+    request: Request,
+    token_user_id: Annotated[
+        int,
+        Depends(auth_security.get_sub_from_access_token),
+    ],
+    password_hasher: Annotated[
+        auth_password_hasher.PasswordHasher,
+        Depends(auth_password_hasher.get_password_hasher),
+    ],
+    db: Annotated[
+        Session,
+        Depends(core_database.get_db),
+    ],
+) -> mfa_backup_codes_schema.MFABackupCodesResponse:
+    """
+    Generate new MFA backup codes for authenticated user.
+
+    Args:
+        response: FastAPI response object.
+        request: FastAPI request object for rate limiting.
+        token_user_id: User ID from access token.
+        password_hasher: Password hasher for code generation.
+        db: Database session.
+
+    Returns:
+        Response with generated backup codes and timestamp.
+
+    Raises:
+        HTTPException: If user not found or MFA not enabled.
+    """
+    user = users_crud.get_user_by_id(token_user_id, db)
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+        )
+
+    if not user.mfa_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="MFA must be enabled to generate backup codes",
+        )
+
+    # Generate codes (invalidates old codes)
+    codes = mfa_backup_codes_crud.create_backup_codes(
+        token_user_id, password_hasher, db
+    )
+
+    # Log event
+    core_logger.print_to_log(f"User {user.id} generated MFA backup codes", "info")
+
+    return mfa_backup_codes_schema.MFABackupCodesResponse(
+        codes=codes,
+        created_at=datetime.now(timezone.utc),
+    )
+
+
 # Identity Provider Management Endpoints
 @router.get(
     "/idp",
-    response_model=list[user_idp_schema.UserIdentityProviderResponse],
     status_code=status.HTTP_200_OK,
+    response_model=list[user_idp_schema.UsersIdentityProviderResponse],
 )
 async def get_my_identity_providers(
     token_user_id: Annotated[
@@ -732,7 +1012,7 @@ async def get_my_identity_providers(
         Session,
         Depends(core_database.get_db),
     ],
-):
+) -> list[user_idp_schema.UsersIdentityProviderResponse]:
     """
     Retrieve all identity provider links for the authenticated user.
     This endpoint fetches all external identity provider (IdP) connections associated
@@ -761,38 +1041,23 @@ async def get_my_identity_providers(
         HTTPException: May raise authentication/authorization errors via the dependency injection.
     """
     # Get user's IdP links
-    idp_links = user_idp_crud.get_user_identity_providers_by_user_id(token_user_id, db)
+    idp_links = user_idp_crud.get_user_identity_providers_by_user_id(
+        token_user_id,
+        db,
+    )
 
-    # Enrich with IDP details (reuse logic from admin endpoint)
-    enriched_links = []
-    for link in idp_links:
-        # Convert SQLAlchemy model to dict
-        link_dict = {
-            "id": link.id,
-            "user_id": link.user_id,
-            "idp_id": link.idp_id,
-            "idp_subject": link.idp_subject,
-            "linked_at": link.linked_at,
-            "last_login": link.last_login,
-            "idp_access_token_expires_at": link.idp_access_token_expires_at,
-            "idp_refresh_token_updated_at": link.idp_refresh_token_updated_at,
-        }
-
-        # Fetch IDP details for display
-        idp = idp_crud.get_identity_provider(link.idp_id, db)
-        if idp:
-            link_dict["idp_name"] = idp.name
-            link_dict["idp_slug"] = idp.slug
-            link_dict["idp_icon"] = idp.icon
-            link_dict["idp_provider_type"] = idp.provider_type
-
-        enriched_links.append(link_dict)
-    return enriched_links
+    # Enrich with IDP details (batch fetch to avoid N+1 queries)
+    return user_idp_utils.enrich_user_identity_providers(
+        idp_links,
+        token_user_id,
+        db,
+    )
 
 
 @router.delete(
     "/idp/{idp_id}",
     status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
 )
 async def delete_my_identity_provider(
     idp_id: int,
@@ -804,7 +1069,7 @@ async def delete_my_identity_provider(
         Session,
         Depends(core_database.get_db),
     ],
-):
+) -> None:
     """
     Delete (unlink) an identity provider from the authenticated user's account.
 

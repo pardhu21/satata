@@ -11,6 +11,7 @@
   "hidePassword": "Hide password",
   "showPassword": "Show password",
   "mfaCode": "Codice MFA",
+  "mfaCodeHint": "Inserisci il codice a 6 cifre dalla tua app di autenticazione, oppure usa un codice di backup",
   "mfaRequired": "Autenticazione a più fattori richiesta. Inserisci il tuo codice a 6 cifre.",
   "verifyMFAButton": "Verifica MFA",
   "invalidMFACode": "Codice MFA non valido. Riprova.",
@@ -45,5 +46,6 @@
   "ssoAccountDisabled": "Your account has been disabled. Please contact your administrator",
   "ssoAutoCreateDisabled": "Account auto-creation is disabled. Please contact your administrator",
   "ssoErrorUndefined": "An unexpected error occurred during SSO authentication",
-  "forceLocalLogin": "Local login flag enabled. Please use your username and password to log in."
+  "forceLocalLogin": "Local login flag enabled. Please use your username and password to log in.",
+  "ssoTokenExchangeFailed": "SSO token exchange failed."
 }

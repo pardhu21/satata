@@ -1,3 +1,15 @@
+"""Profile utility functions for MFA and data operations.
+
+This module provides helper functions for:
+- TOTP secret generation and verification
+- QR code generation for MFA setup
+- MFA enable/disable/verify workflows
+- SQLAlchemy to dict conversion
+- Memory and timeout monitoring
+- ZIP file operations
+- Performance configuration management
+"""
+
 import json
 import pyotp
 import qrcode
@@ -8,12 +20,15 @@ import psutil
 from io import BytesIO
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
-from typing import Type, Any, Dict, TypeVar
+from typing import Any, TypeVar
 
 import core.cryptography as core_cryptography
 import core.logger as core_logger
 import profile.schema as profile_schema
-import users.user.crud as users_crud
+import users.users.crud as users_crud
+import auth.password_hasher as auth_password_hasher
+import auth.mfa_backup_codes.crud as mfa_backup_codes_crud
+import auth.mfa_backup_codes.utils as mfa_backup_codes_utils
 from profile.exceptions import (
     MemoryAllocationError,
 )
@@ -49,7 +64,7 @@ class BasePerformanceConfig:
         self.enable_memory_monitoring = enable_memory_monitoring
 
     @classmethod
-    def _get_tier_configs(cls) -> Dict[str, Dict[str, Any]]:
+    def _get_tier_configs(cls) -> dict[str, dict[str, Any]]:
         """
         Get configuration tiers for different memory levels.
 
@@ -62,7 +77,7 @@ class BasePerformanceConfig:
         raise NotImplementedError("Subclasses must implement _get_tier_configs")
 
     @classmethod
-    def get_auto_config(cls: Type[T_PerformanceConfig]) -> T_PerformanceConfig:
+    def get_auto_config(cls: type[T_PerformanceConfig]) -> T_PerformanceConfig:
         """
         Create config automatically based on system memory.
 
@@ -187,7 +202,13 @@ def setup_user_mfa(user_id: int, db: Session) -> profile_schema.MFASetupResponse
     )
 
 
-def enable_user_mfa(user_id: int, secret: str, mfa_code: str, db: Session):
+def enable_user_mfa(
+    user_id: int,
+    secret: str,
+    mfa_code: str,
+    password_hasher: auth_password_hasher.PasswordHasher,
+    db: Session,
+) -> list[str]:
     """
     Enable MFA for user after verification.
 
@@ -195,7 +216,11 @@ def enable_user_mfa(user_id: int, secret: str, mfa_code: str, db: Session):
         user_id: User ID to enable MFA for.
         secret: TOTP secret to verify.
         mfa_code: MFA code to verify.
+        password_hasher: Password hasher instance for backup code generation.
         db: Database session.
+
+    Returns:
+        List of generated backup codes.
 
     Raises:
         HTTPException: If user not found, MFA enabled, code
@@ -230,10 +255,16 @@ def enable_user_mfa(user_id: int, secret: str, mfa_code: str, db: Session):
         )
 
     # Update user with MFA enabled and secret
-    users_crud.enable_user_mfa(user_id, encrypted_secret, db)
+    users_crud.update_user_mfa(user_id, db, encrypted_secret=encrypted_secret)
+
+    backup_codes = mfa_backup_codes_crud.create_backup_codes(
+        user_id, password_hasher, db
+    )
+
+    return backup_codes
 
 
-def disable_user_mfa(user_id: int, mfa_code: str, db: Session):
+def disable_user_mfa(user_id: int, mfa_code: str, db: Session) -> None:
     """
     Disable MFA for user after verification.
 
@@ -275,16 +306,25 @@ def disable_user_mfa(user_id: int, mfa_code: str, db: Session):
         )
 
     # Disable MFA for user
-    users_crud.disable_user_mfa(user_id, db)
+    users_crud.update_user_mfa(user_id, db)
+
+    # Delete all backup codes for user
+    mfa_backup_codes_crud.delete_user_backup_codes(user_id, db)
 
 
-def verify_user_mfa(user_id: int, mfa_code: str, db: Session) -> bool:
+def verify_user_mfa(
+    user_id: int,
+    mfa_code: str,
+    password_hasher: auth_password_hasher.PasswordHasher,
+    db: Session,
+) -> bool:
     """
-    Verify MFA code for user.
+    Verify MFA code for user (TOTP or backup code).
 
     Args:
         user_id: User ID to verify MFA for.
-        mfa_code: MFA code to verify.
+        mfa_code: MFA code to verify (6-digit TOTP or 8-character backup code).
+        password_hasher: Password hasher instance for backup code verification.
         db: Database session.
 
     Returns:
@@ -292,6 +332,11 @@ def verify_user_mfa(user_id: int, mfa_code: str, db: Session) -> bool:
 
     Raises:
         HTTPException: If user not found.
+
+    Notes:
+        - First tries TOTP verification (6 digits)
+        - If TOTP fails and code is 8 characters, tries backup code
+        - Backup codes are consumed on successful verification
     """
     user = users_crud.get_user_by_id(user_id, db)
     if not user:
@@ -302,16 +347,48 @@ def verify_user_mfa(user_id: int, mfa_code: str, db: Session) -> bool:
     if not user.mfa_enabled or not user.mfa_secret:
         return False
 
-    # Decrypt the secret
-    try:
-        secret = core_cryptography.decrypt_token_fernet(user.mfa_secret)
-        if not secret:
-            core_logger.print_to_log("Failed to decrypt MFA secret", "error")
+    # Normalize code (remove whitespaces in the beginning and end, uppercase)
+    normalized_code = mfa_code.strip().upper()
+
+    # Try TOTP first (6 digits)
+    if len(normalized_code) == 6 and normalized_code.isdigit():
+        try:
+            secret = core_cryptography.decrypt_token_fernet(user.mfa_secret)
+            if not secret:
+                core_logger.print_to_log("Failed to decrypt MFA secret", "error")
+                return False
+
+            if verify_totp(secret, normalized_code):
+                core_logger.print_to_log(
+                    f"User {user_id} verified MFA with TOTP", "debug"
+                )
+                return True
+        except (ValueError, pyotp.OTPError) as err:
+            core_logger.print_to_log(
+                f"Error in TOTP verification: {err}", "error", exc=err
+            )
             return False
-        return verify_totp(secret, mfa_code)
-    except Exception as err:
-        core_logger.print_to_log(f"Error in verify_user_mfa: {err}", "error", exc=err)
-        return False
+        except Exception as err:
+            core_logger.print_to_log(
+                f"Unknown error in TOTP verification: {err}", "error", exc=err
+            )
+            return False
+
+    # Try backup code (9 alphanumeric characters with dash XXXX-XXXX)
+    elif len(normalized_code) == 9 and normalized_code[4] == "-":
+        try:
+            if mfa_backup_codes_utils.verify_and_consume_backup_code(
+                user_id, normalized_code, password_hasher, db
+            ):
+                return True
+        except Exception as err:
+            core_logger.print_to_log(
+                f"Error in backup code verification: {err}", "error", exc=err
+            )
+            return False
+
+    # Invalid format or code didn't match
+    return False
 
 
 def is_mfa_enabled_for_user(user_id: int, db: Session) -> bool:
@@ -332,7 +409,7 @@ def is_mfa_enabled_for_user(user_id: int, db: Session) -> bool:
 
 
 # Export utility functions
-def sqlalchemy_obj_to_dict(obj):
+def sqlalchemy_obj_to_dict(obj: Any) -> dict[str, Any]:
     """
     Convert SQLAlchemy object to dictionary.
 
@@ -348,8 +425,12 @@ def sqlalchemy_obj_to_dict(obj):
 
 
 def write_json_to_zip(
-    zipf: zipfile.ZipFile, filename: str, data, counts: dict, ensure_ascii: bool = False
-):
+    zipf: zipfile.ZipFile,
+    filename: str,
+    data: dict,
+    counts: dict,
+    ensure_ascii: bool = False,
+) -> None:
     """
     Write JSON data to ZIP file and update counts.
 
@@ -373,7 +454,7 @@ def write_json_to_zip(
 def check_timeout(
     timeout_seconds: int | None,
     start_time: float,
-    exception_class: Type[Exception],
+    exception_class: type[Exception],
     operation_type: str,
 ) -> None:
     """
@@ -474,7 +555,7 @@ def check_memory_usage(
         )
 
 
-def initialize_operation_counts(include_user_count: bool = False) -> Dict[str, int]:
+def initialize_operation_counts(include_user_count: bool = False) -> dict[str, int]:
     """
     Initialize dictionary for tracking operation counts.
 
