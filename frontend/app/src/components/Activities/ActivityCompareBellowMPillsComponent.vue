@@ -9,17 +9,17 @@
     />
 
     <!-- Pace values -->
-    <div v-if="pacePresent || comparePacePresent">
+    <div v-if="pacePresent || comparedPacePresent">
       <span class="fw-normal">
         {{ $t('activityBellowMPillsComponent.subTitlePace') }}
       </span>
       <div style="height: 400px; margin: 20px 0">
         <ActivityCompareStreamsLineChartComponent
           :activity="activity"
-          :comparedActivity="compareActivity"
+          :comparedActivity="comparedActivity"
           :graphSelection="'pace'"
           :activityStreams="activityActivityStreams"
-          :comparedActivityStreams="compareActivityActivityStreams"
+          :comparedActivityStreams="comparedActivityActivityStreams"
         />
       </div>
 
@@ -47,24 +47,24 @@
       </div>
 
       <!-- Compared Activity Stats -->
-      <div v-if="comparePacePresent && compareActivity" class="mb-3">
-        <div class="text-muted small mb-2">{{ compareActivity.name || 'Activity 2' }}</div>
-        <div class="d-flex justify-content-between mt-2" v-if="compareFormattedPace">
+      <div v-if="comparedPacePresent && comparedActivity" class="mb-3">
+        <div class="text-muted small mb-2">{{ comparedActivity.name || 'Activity 2' }}</div>
+        <div class="d-flex justify-content-between mt-2" v-if="comparedFormattedPace">
           <span>{{ $t('activityBellowMPillsComponent.labelAvgPace') }}</span>
           <span
-            ><b>{{ compareFormattedPace }}</b></span
+            ><b>{{ comparedFormattedPace }}</b></span
           >
         </div>
-        <div class="d-flex justify-content-between mt-2" v-if="compareActivity.total_elapsed_time">
+        <div class="d-flex justify-content-between mt-2" v-if="comparedActivity.total_elapsed_time">
           <span>{{ $t('activityBellowMPillsComponent.labelElapsedTime') }}</span>
           <span
-            ><b>{{ formatSecondsToMinutes(compareActivity.total_elapsed_time) }}</b></span
+            ><b>{{ formatSecondsToMinutes(comparedActivity.total_elapsed_time) }}</b></span
           >
         </div>
-        <div class="d-flex justify-content-between mt-2" v-if="compareActivity.total_timer_time">
+        <div class="d-flex justify-content-between mt-2" v-if="comparedActivity.total_timer_time">
           <span>{{ $t('activityBellowMPillsComponent.labelMovingTime') }}</span>
           <span
-            ><b>{{ formatSecondsToMinutes(compareActivity.total_timer_time) }}</b></span
+            ><b>{{ formatSecondsToMinutes(comparedActivity.total_timer_time) }}</b></span
           >
         </div>
       </div>
@@ -72,17 +72,17 @@
     </div>
 
     <!-- Velocity values -->
-    <div v-if="velPresent || compareVelPresent">
+    <div v-if="velPresent || comparedVelPresent">
       <span class="fw-normal">
         {{ $t('activityBellowMPillsComponent.subTitleSpeed') }}
       </span>
       <div style="height: 400px; margin: 20px 0">
         <ActivityCompareStreamsLineChartComponent
           :activity="activity"
-          :comparedActivity="compareActivity"
+          :comparedActivity="comparedActivity"
           :graphSelection="'vel'"
           :activityStreams="activityActivityStreams"
-          :comparedActivityStreams="compareActivityActivityStreams"
+          :comparedActivityStreams="comparedActivityActivityStreams"
         />
       </div>
 
@@ -126,37 +126,37 @@
       </div>
 
       <!-- Compared Activity Stats -->
-      <div v-if="compareVelPresent && compareActivity" class="mb-3">
-        <div class="text-muted small mb-2">{{ compareActivity.name || 'Activity 2' }}</div>
-        <div class="d-flex justify-content-between mt-2" v-if="compareActivity.average_speed">
+      <div v-if="comparedVelPresent && comparedActivity" class="mb-3">
+        <div class="text-muted small mb-2">{{ comparedActivity.name || 'Activity 2' }}</div>
+        <div class="d-flex justify-content-between mt-2" v-if="comparedActivity.average_speed">
           <span>{{ $t('activityBellowMPillsComponent.labelAvgSpeed') }}</span>
           <span>
             <span v-if="Number(units) === 1">
               <b
-                >{{ formatAverageSpeedMetric(compareActivity.average_speed) }}
+                >{{ formatAverageSpeedMetric(comparedActivity.average_speed) }}
                 {{ $t('generalItems.unitsKmH') }}</b
               >
             </span>
             <span v-else>
               <b
-                >{{ formatAverageSpeedImperial(compareActivity.average_speed) }}
+                >{{ formatAverageSpeedImperial(comparedActivity.average_speed) }}
                 {{ $t('generalItems.unitsMph') }}</b
               >
             </span>
           </span>
         </div>
-        <div class="d-flex justify-content-between mt-2" v-if="compareActivity.max_speed">
+        <div class="d-flex justify-content-between mt-2" v-if="comparedActivity.max_speed">
           <span>{{ $t('activityBellowMPillsComponent.labelMaxSpeed') }}</span>
           <span>
             <span v-if="Number(units) === 1">
               <b
-                >{{ formatAverageSpeedMetric(compareActivity.max_speed) }}
+                >{{ formatAverageSpeedMetric(comparedActivity.max_speed) }}
                 {{ $t('generalItems.unitsKmH') }}</b
               >
             </span>
             <span v-else>
               <b
-                >{{ formatAverageSpeedImperial(compareActivity.max_speed) }}
+                >{{ formatAverageSpeedImperial(comparedActivity.max_speed) }}
                 {{ $t('generalItems.unitsMph') }}</b
               >
             </span>
@@ -167,17 +167,17 @@
     </div>
 
     <!-- Heart rate values -->
-    <div v-if="hrPresent || compareHrPresent">
+    <div v-if="hrPresent || comparedHrPresent">
       <span class="fw-normal">
         {{ $t('activityBellowMPillsComponent.subTitleHeartRate') }}
       </span>
       <div style="height: 400px; margin: 20px 0">
         <ActivityCompareStreamsLineChartComponent
           :activity="activity"
-          :comparedActivity="compareActivity"
+          :comparedActivity="comparedActivity"
           :graphSelection="'hr'"
           :activityStreams="activityActivityStreams"
-          :comparedActivityStreams="compareActivityActivityStreams"
+          :comparedActivityStreams="comparedActivityActivityStreams"
         />
       </div>
 
@@ -207,25 +207,25 @@
       </div>
 
       <!-- Compared Activity Stats -->
-      <div v-if="compareHrPresent && compareActivity" class="mb-3">
-        <div class="text-muted small mb-2">{{ compareActivity.name || 'Activity 2' }}</div>
-        <div class="d-flex justify-content-between mt-2" v-if="compareActivity.average_hr">
+      <div v-if="comparedHrPresent && comparedActivity" class="mb-3">
+        <div class="text-muted small mb-2">{{ comparedActivity.name || 'Activity 2' }}</div>
+        <div class="d-flex justify-content-between mt-2" v-if="comparedActivity.average_hr">
           <span>{{ $t('activityBellowMPillsComponent.labelAvgHeartRate') }}</span>
           <span
-            ><b>{{ compareActivity.average_hr }} {{ $t('generalItems.unitsBpm') }}</b></span
+            ><b>{{ comparedActivity.average_hr }} {{ $t('generalItems.unitsBpm') }}</b></span
           >
         </div>
-        <div class="d-flex justify-content-between mt-2" v-if="compareActivity.max_hr">
+        <div class="d-flex justify-content-between mt-2" v-if="comparedActivity.max_hr">
           <span>{{ $t('activityBellowMPillsComponent.labelMaxHeartRate') }}</span>
           <span
-            ><b>{{ compareActivity.max_hr }} {{ $t('generalItems.unitsBpm') }}</b></span
+            ><b>{{ comparedActivity.max_hr }} {{ $t('generalItems.unitsBpm') }}</b></span
           >
         </div>
         <BarChartComponent
-          v-if="Object.values(compareHrZones).length > 0"
-          :labels="getHrBarChartData(compareHrZones, t).labels"
-          :values="getHrBarChartData(compareHrZones, t).values"
-          :barColors="getHrBarChartData(compareHrZones, t).barColors"
+          v-if="Object.values(comparedHrZones).length > 0"
+          :labels="getHrBarChartData(comparedHrZones, t).labels"
+          :values="getHrBarChartData(comparedHrZones, t).values"
+          :barColors="getHrBarChartData(comparedHrZones, t).barColors"
           :datalabelsFormatter="(value) => `${Math.round(value)}%`"
           :title="$t('activityMandAbovePillsComponent.labelHRZones')"
         />
@@ -234,17 +234,17 @@
     </div>
 
     <!-- Power values -->
-    <div v-if="powerPresent || comparePowerPresent">
+    <div v-if="powerPresent || comparedPowerPresent">
       <span class="fw-normal">
         {{ $t('activityBellowMPillsComponent.subTitlePower') }}
       </span>
       <div style="height: 400px; margin: 20px 0">
         <ActivityCompareStreamsLineChartComponent
           :activity="activity"
-          :comparedActivity="compareActivity"
+          :comparedActivity="comparedActivity"
           :graphSelection="'power'"
           :activityStreams="activityActivityStreams"
-          :comparedActivityStreams="compareActivityActivityStreams"
+          :comparedActivityStreams="comparedActivityActivityStreams"
         />
       </div>
 
@@ -272,27 +272,27 @@
       </div>
 
       <!-- Compared Activity Stats -->
-      <div v-if="comparePowerPresent && compareActivity" class="mb-3">
-        <div class="text-muted small mb-2">{{ compareActivity.name || 'Activity 2' }}</div>
-        <div class="d-flex justify-content-between mt-2" v-if="compareActivity.average_power">
+      <div v-if="comparedPowerPresent && comparedActivity" class="mb-3">
+        <div class="text-muted small mb-2">{{ comparedActivity.name || 'Activity 2' }}</div>
+        <div class="d-flex justify-content-between mt-2" v-if="comparedActivity.average_power">
           <span>{{ $t('activityBellowMPillsComponent.labelAvgPower') }}</span>
           <span
             ><b
-              >{{ compareActivity.average_power }} {{ $t('generalItems.unitsWattsShort') }}</b
+              >{{ comparedActivity.average_power }} {{ $t('generalItems.unitsWattsShort') }}</b
             ></span
           >
         </div>
-        <div class="d-flex justify-content-between mt-2" v-if="compareActivity.max_power">
+        <div class="d-flex justify-content-between mt-2" v-if="comparedActivity.max_power">
           <span>{{ $t('activityBellowMPillsComponent.labelMaxPower') }}</span>
           <span
-            ><b>{{ compareActivity.max_power }} {{ $t('generalItems.unitsWattsShort') }}</b></span
+            ><b>{{ comparedActivity.max_power }} {{ $t('generalItems.unitsWattsShort') }}</b></span
           >
         </div>
-        <div class="d-flex justify-content-between mt-2" v-if="compareActivity.normalized_power">
+        <div class="d-flex justify-content-between mt-2" v-if="comparedActivity.normalized_power">
           <span>{{ $t('activityBellowMPillsComponent.labelNormalizedPower') }}</span>
           <span
             ><b
-              >{{ compareActivity.normalized_power }} {{ $t('generalItems.unitsWattsShort') }}</b
+              >{{ comparedActivity.normalized_power }} {{ $t('generalItems.unitsWattsShort') }}</b
             ></span
           >
         </div>
@@ -301,7 +301,7 @@
     </div>
 
     <!-- Cadence values -->
-    <div v-if="cadPresent || compareCadPresent">
+    <div v-if="cadPresent || comparedCadPresent">
       <span class="fw-normal" v-if="!activityTypeIsSwimming(activity)">
         {{ $t('activityBellowMPillsComponent.subTitleCadence') }}
       </span>
@@ -311,10 +311,10 @@
       <div style="height: 400px; margin: 20px 0">
         <ActivityCompareStreamsLineChartComponent
           :activity="activity"
-          :comparedActivity="compareActivity"
+          :comparedActivity="comparedActivity"
           :graphSelection="'cad'"
           :activityStreams="activityActivityStreams"
-          :comparedActivityStreams="compareActivityActivityStreams"
+          :comparedActivityStreams="comparedActivityActivityStreams"
         />
       </div>
 
@@ -346,28 +346,28 @@
       </div>
 
       <!-- Compared Activity Stats -->
-      <div v-if="compareCadPresent && compareActivity" class="mb-3">
-        <div class="text-muted small mb-2">{{ compareActivity.name || 'Activity 2' }}</div>
-        <div class="d-flex justify-content-between mt-2" v-if="compareActivity.average_cad">
-          <span v-if="!activityTypeIsSwimming(compareActivity)">
+      <div v-if="comparedCadPresent && comparedActivity" class="mb-3">
+        <div class="text-muted small mb-2">{{ comparedActivity.name || 'Activity 2' }}</div>
+        <div class="d-flex justify-content-between mt-2" v-if="comparedActivity.average_cad">
+          <span v-if="!activityTypeIsSwimming(comparedActivity)">
             {{ $t('activityBellowMPillsComponent.labelAvgCadence') }}
           </span>
           <span v-else>
             {{ $t('activityBellowMPillsComponent.labelAvgStrokeRate') }}
           </span>
           <span
-            ><b>{{ compareActivity.average_cad }} {{ $t('generalItems.unitsSpm') }}</b></span
+            ><b>{{ comparedActivity.average_cad }} {{ $t('generalItems.unitsSpm') }}</b></span
           >
         </div>
-        <div class="d-flex justify-content-between mt-2" v-if="compareActivity.max_cad">
-          <span v-if="!activityTypeIsSwimming(compareActivity)">
+        <div class="d-flex justify-content-between mt-2" v-if="comparedActivity.max_cad">
+          <span v-if="!activityTypeIsSwimming(comparedActivity)">
             {{ $t('activityBellowMPillsComponent.labelMaxCadence') }}
           </span>
           <span v-else>
             {{ $t('activityBellowMPillsComponent.labelMaxStrokeRate') }}
           </span>
           <span
-            ><b>{{ compareActivity.max_cad }} {{ $t('generalItems.unitsSpm') }}</b></span
+            ><b>{{ comparedActivity.max_cad }} {{ $t('generalItems.unitsSpm') }}</b></span
           >
         </div>
       </div>
@@ -375,17 +375,17 @@
     </div>
 
     <!-- Elevation values -->
-    <div v-if="(elePresent || compareElePresent) && !activityTypeIsSwimming(activity)">
+    <div v-if="(elePresent || comparedElePresent) && !activityTypeIsSwimming(activity)">
       <span class="fw-normal">
         {{ $t('activityBellowMPillsComponent.subTitleElevation') }}
       </span>
       <div style="height: 400px; margin: 20px 0">
         <ActivityCompareStreamsLineChartComponent
           :activity="activity"
-          :comparedActivity="compareActivity"
+          :comparedActivity="comparedActivity"
           :graphSelection="'ele'"
           :activityStreams="activityActivityStreams"
-          :comparedActivityStreams="compareActivityActivityStreams"
+          :comparedActivityStreams="comparedActivityActivityStreams"
         />
       </div>
 
@@ -419,28 +419,28 @@
       </div>
 
       <!-- Compared Activity Stats -->
-      <div v-if="compareElePresent && compareActivity" class="mb-3">
-        <div class="text-muted small mb-2">{{ compareActivity.name || 'Activity 2' }}</div>
-        <div class="d-flex justify-content-between mt-2" v-if="compareActivity.elevation_gain">
+      <div v-if="comparedElePresent && comparedActivity" class="mb-3">
+        <div class="text-muted small mb-2">{{ comparedActivity.name || 'Activity 2' }}</div>
+        <div class="d-flex justify-content-between mt-2" v-if="comparedActivity.elevation_gain">
           <span>{{ $t('activityBellowMPillsComponent.labelElevationGain') }}</span>
           <span v-if="Number(units) === 1">
-            <b>{{ compareActivity.elevation_gain }} {{ $t('generalItems.unitsM') }}</b>
+            <b>{{ comparedActivity.elevation_gain }} {{ $t('generalItems.unitsM') }}</b>
           </span>
           <span v-else>
             <b
-              >{{ metersToFeet(compareActivity.elevation_gain) }}
+              >{{ metersToFeet(comparedActivity.elevation_gain) }}
               {{ $t('generalItems.unitsFeetShort') }}</b
             >
           </span>
         </div>
-        <div class="d-flex justify-content-between mt-2" v-if="compareActivity.elevation_loss">
+        <div class="d-flex justify-content-between mt-2" v-if="comparedActivity.elevation_loss">
           <span>{{ $t('activityBellowMPillsComponent.labelElevationLoss') }}</span>
           <span v-if="Number(units) === 1">
-            <b>{{ compareActivity.elevation_loss }} {{ $t('generalItems.unitsM') }}</b>
+            <b>{{ comparedActivity.elevation_loss }} {{ $t('generalItems.unitsM') }}</b>
           </span>
           <span v-else>
             <b
-              >{{ metersToFeet(compareActivity.elevation_loss) }}
+              >{{ metersToFeet(comparedActivity.elevation_loss) }}
               {{ $t('generalItems.unitsFeetShort') }}</b
             >
           </span>
@@ -522,19 +522,19 @@ const props = defineProps({
     type: [Object, null],
     required: true
   },
-  compareActivity: {
+  comparedActivity: {
     type: Object,
     required: true
   },
-  compareActivityActivityLaps: {
+  comparedActivityActivityLaps: {
     type: [Object, null],
     required: true
   },
-  compareActivityActivityWorkoutSteps: {
+  comparedActivityActivityWorkoutSteps: {
     type: [Object, null],
     required: true
   },
-  compareActivityActivityStreams: {
+  comparedActivityActivityStreams: {
     type: [Object, null],
     required: true
   },
@@ -542,11 +542,11 @@ const props = defineProps({
     type: Number,
     default: 1
   },
-  compareActivityActivityExerciseTitles: {
+  comparedActivityActivityExerciseTitles: {
     type: [Object, null],
     required: true
   },
-  compareActivityActivitySets: {
+  comparedActivityActivitySets: {
     type: [Object, null],
     required: true
   }
@@ -563,16 +563,14 @@ const pacePresent = ref(false)
 const formattedPace = ref(null)
 const hrZones = ref({})
 
-const compareHrPresent = ref(false)
-const comparePowerPresent = ref(false)
-const compareElePresent = ref(false)
-const compareCadPresent = ref(false)
-const compareVelPresent = ref(false)
-const comparePacePresent = ref(false)
-const compareFormattedPace = ref(null)
-const compareHrZones = ref({})
-
-console.log('compareActivity: ', props.compareActivity)
+const comparedHrPresent = ref(false)
+const comparedPowerPresent = ref(false)
+const comparedElePresent = ref(false)
+const comparedCadPresent = ref(false)
+const comparedVelPresent = ref(false)
+const comparedPacePresent = ref(false)
+const comparedFormattedPace = ref(null)
+const comparedHrZones = ref({})
 
 onMounted(async () => {
   try {
@@ -625,43 +623,43 @@ onMounted(async () => {
   }
 
   try {
-    if (props.compareActivityActivityStreams && props.compareActivityActivityStreams.length > 0) {
-      // Check if the compareActivity has the streams
-      for (let i = 0; i < props.compareActivityActivityStreams.length; i++) {
-        if (props.compareActivityActivityStreams[i].stream_type === 1) {
-          compareHrPresent.value = true
+    if (props.comparedActivityActivityStreams && props.comparedActivityActivityStreams.length > 0) {
+      // Check if the comparedActivity has the streams
+      for (let i = 0; i < props.comparedActivityActivityStreams.length; i++) {
+        if (props.comparedActivityActivityStreams[i].stream_type === 1) {
+          comparedHrPresent.value = true
           // If HR zones are present, add them to the hrZones object
-          const hrStream = props.compareActivityActivityStreams.find(
+          const hrStream = props.comparedActivityActivityStreams.find(
             (stream) => stream.hr_zone_percentages
           )
-          compareHrZones.value =
+          comparedHrZones.value =
             hrStream && hrStream.hr_zone_percentages ? hrStream.hr_zone_percentages : {}
         }
-        if (props.compareActivityActivityStreams[i].stream_type === 2) {
-          comparePowerPresent.value = true
+        if (props.comparedActivityActivityStreams[i].stream_type === 2) {
+          comparedPowerPresent.value = true
         }
-        if (props.compareActivityActivityStreams[i].stream_type === 3) {
-          compareCadPresent.value = true
+        if (props.comparedActivityActivityStreams[i].stream_type === 3) {
+          comparedCadPresent.value = true
         }
-        if (props.compareActivityActivityStreams[i].stream_type === 4) {
-          compareElePresent.value = true
+        if (props.comparedActivityActivityStreams[i].stream_type === 4) {
+          comparedElePresent.value = true
         }
-        if (props.compareActivityActivityStreams[i].stream_type === 5) {
+        if (props.comparedActivityActivityStreams[i].stream_type === 5) {
           if (
-            activityTypeIsCycling(props.compareActivity) ||
-            activityTypeIsSailing(props.compareActivity) ||
-            activityTypeIsWindsurf(props.compareActivity)
+            activityTypeIsCycling(props.comparedActivity) ||
+            activityTypeIsSailing(props.comparedActivity) ||
+            activityTypeIsWindsurf(props.comparedActivity)
           ) {
-            compareVelPresent.value = true
+            comparedVelPresent.value = true
           }
         }
-        if (props.compareActivityActivityStreams[i].stream_type === 6) {
+        if (props.comparedActivityActivityStreams[i].stream_type === 6) {
           if (
-            activityTypeNotCycling(props.compareActivity) &&
-            activityTypeNotSailing(props.compareActivity) &&
-            activityTypeNotWindsurf(props.compareActivity)
+            activityTypeNotCycling(props.comparedActivity) &&
+            activityTypeNotSailing(props.comparedActivity) &&
+            activityTypeNotWindsurf(props.comparedActivity)
           ) {
-            comparePacePresent.value = true
+            comparedPacePresent.value = true
           }
         }
       }
@@ -693,23 +691,23 @@ onMounted(async () => {
 
   try {
     if (
-      activityTypeIsSwimming(props.compareActivity) ||
-      activityTypeIsRowing(props.compareActivity)
+      activityTypeIsSwimming(props.comparedActivity) ||
+      activityTypeIsRowing(props.comparedActivity)
     ) {
       if (Number(props.units) === 1) {
-        compareFormattedPace.value = computed(() =>
-          formatPaceSwimMetric(props.compareActivity.pace)
+        comparedFormattedPace.value = computed(() =>
+          formatPaceSwimMetric(props.comparedActivity.pace)
         )
       } else {
-        compareFormattedPace.value = computed(() =>
-          formatPaceSwimImperial(props.compareActivity.pace)
+        comparedFormattedPace.value = computed(() =>
+          formatPaceSwimImperial(props.comparedActivity.pace)
         )
       }
     } else {
       if (Number(props.units) === 1) {
-        compareFormattedPace.value = computed(() => formatPaceMetric(props.compareActivity.pace))
+        comparedFormattedPace.value = computed(() => formatPaceMetric(props.comparedActivity.pace))
       } else {
-        compareFormattedPace.value = computed(() => formatPaceImperial(props.compareActivity.pace))
+        comparedFormattedPace.value = computed(() => formatPaceImperial(props.comparedActivity.pace))
       }
     }
   } catch (error) {

@@ -166,8 +166,6 @@ const {
   setPageNumber
 } = useActivities()
 
-console.log('activity', props.activity)
-
 const router = useRouter()
 const selectedActivityId = ref(null)
 

@@ -90,7 +90,7 @@
         <div class="border-start"></div>
       </div>
 
-      <!-- Compare Activity -->
+      <!-- Compared Activity -->
       <div class="d-flex flex-md-grow-0 justify-content-between w-100 w-lg-50">
         <!-- user name and photo zone -->
         <div class="d-flex align-items-center">
@@ -193,7 +193,7 @@
         <div class="border-start"></div>
       </div>
 
-      <!-- Compare Activity -->
+      <!-- Compared Activity -->
       <div class="d-flex flex-md-grow-0 justify-content-between w-50">
         <h1>
           <span v-if="comparedActivity.name === 'Workout'">{{
@@ -245,7 +245,7 @@
     <!-- Activity summary -->
     <!-- distance -->
     <div class="row mt-3 align-items-center text-start">
-      <ActivityMetricComapreComponent
+      <ActivityCompareMetricComponent
         v-if="
           activity.activity_type != 10 &&
           activity.activity_type != 14 &&
@@ -257,7 +257,7 @@
         "
         :label="$t('activitySummaryComponent.activityDistance')"
         :value="formatDistance(t, activity, units)"
-        :compareValue="formatDistance(t, comparedActivity, units)"
+        :comparedValue="formatDistance(t, comparedActivity, units)"
         :compare="true"
       />
 
@@ -266,27 +266,27 @@
         v-else
         :label="$t('activitySummaryComponent.activityCalories')"
         :value="formatCalories(t, activity.calories)"
-        :compareValue="formatCalories(t, comparedActivity.calories)"
+        :comparedValue="formatCalories(t, comparedActivity.calories)"
         :compare="true"
       />
       <!-- activity time-->
-      <ActivityMetricComapreComponent
+      <ActivityCompareMetricComponent
         :label="$t('activitySummaryComponent.activityTime')"
         :value="formatSecondsToMinutes(activity.total_elapsed_time)"
-        :compareValue="formatSecondsToMinutes(comparedActivity.total_elapsed_time)"
+        :comparedValue="formatSecondsToMinutes(comparedActivity.total_elapsed_time)"
         :compare="true"
       />
       <div class="col border-start border-opacity-50">
         <!-- elevation -->
-        <ActivityMetricComapreComponent
+        <ActivityCompareMetricComponent
           v-if="activityTypeIsCycling(activity)"
           :label="$t('activitySummaryComponent.activityEleGain')"
           :value="formatElevation(t, activity.elevation_gain, units)"
-          :compareValue="formatElevation(t, comparedActivity.elevation_gain, units)"
+          :comparedValue="formatElevation(t, comparedActivity.elevation_gain, units)"
           :compare="true"
         />
         <!-- pace -->
-        <ActivityMetricComapreComponent
+        <ActivityCompareMetricComponent
           v-else-if="
             activity.activity_type != 10 &&
             activity.activity_type != 14 &&
@@ -300,23 +300,23 @@
           "
           :label="$t('activitySummaryComponent.activityPace')"
           :value="formatPace(t, activity, units)"
-          :compareValue="formatPace(t, comparedActivity, units)"
+          :comparedValue="formatPace(t, comparedActivity, units)"
           :compare="true"
         />
         <!-- avg_speed sailing activities -->
-        <ActivityMetricComapreComponent
+        <ActivityCompareMetricComponent
           v-else-if="activityTypeIsSailing(activity)"
           :label="$t('activitySummaryComponent.activityAvgSpeed')"
           :value="formatAverageSpeed(t, activity, units)"
-          :compareValue="formatAverageSpeed(t, comparedActivity, units)"
+          :comparedValue="formatAverageSpeed(t, comparedActivity, units)"
           :compare="true"
         />
         <!-- avg_hr -->
-        <ActivityMetricComapreComponent
+        <ActivityCompareMetricComponent
           v-else
           :label="$t('activitySummaryComponent.activityAvgHR')"
           :value="formatHr(t, activity.average_hr)"
-          :compareValue="formatHr(t, comparedActivity.average_hr)"
+          :comparedValue="formatHr(t, comparedActivity.average_hr)"
           :compare="true"
         />
       </div>
@@ -335,59 +335,59 @@
       "
     >
       <!-- avg_power (running & cycling) -->
-      <ActivityMetricComapreComponent
+      <ActivityCompareMetricComponent
         v-if="activityTypeIsCycling(activity) || activityTypeIsRunning(activity)"
         :label="$t('activitySummaryComponent.activityAvgPower')"
         :value="formatPower(t, activity.average_power)"
-        :compareValue="formatPower(t, comparedActivity.average_power)"
+        :comparedValue="formatPower(t, comparedActivity.average_power)"
         :compare="true"
       />
 
       <!-- avg_hr (non running & cycling) -->
-      <ActivityMetricComapreComponent
+      <ActivityCompareMetricComponent
         v-if="activityTypeNotCycling(activity) && activityTypeNotRunning(activity)"
         :label="$t('activitySummaryComponent.activityAvgHR')"
         :value="formatHr(t, activity.average_hr)"
-        :compareValue="formatHr(t, comparedActivity.average_hr)"
+        :comparedValue="formatHr(t, comparedActivity.average_hr)"
         :compare="true"
       />
 
       <!-- max_hr -->
-      <ActivityMetricComapreComponent
+      <ActivityCompareMetricComponent
         v-if="activityTypeNotCycling(activity) && activityTypeNotRunning(activity)"
         class="border-start border-opacity-50"
         :label="$t('activitySummaryComponent.activityMaxHR')"
         :value="formatHr(t, activity.max_hr)"
-        :compareValue="formatHr(t, comparedActivity.max_hr)"
+        :comparedValue="formatHr(t, comparedActivity.max_hr)"
         :compare="true"
       />
 
       <!-- elevation gain (running) -->
-      <ActivityMetricComapreComponent
+      <ActivityCompareMetricComponent
         v-if="activityTypeIsRunning(activity)"
         class="border-start border-opacity-50"
         :label="$t('activitySummaryComponent.activityEleGain')"
         :value="formatElevation(t, activity.elevation_gain, units)"
-        :compareValue="formatElevation(t, comparedActivity.elevation_gain, units)"
+        :comparedValue="formatElevation(t, comparedActivity.elevation_gain, units)"
         :compare="true"
       />
 
       <!-- avg_speed (cycling) -->
-      <ActivityMetricComapreComponent
+      <ActivityCompareMetricComponent
         v-if="activityTypeIsCycling(activity)"
         class="border-start border-opacity-50"
         :label="$t('activitySummaryComponent.activityAvgSpeed')"
         :value="formatAverageSpeed(t, activity, units)"
-        :compareValue="formatAverageSpeed(t, comparedActivity, units)"
+        :comparedValue="formatAverageSpeed(t, comparedActivity, units)"
         :compare="true"
       />
 
       <!-- calories -->
-      <ActivityMetricComapreComponent
+      <ActivityCompareMetricComponent
         class="border-start border-opacity-50"
         :label="$t('activitySummaryComponent.activityCalories')"
         :value="formatCalories(t, activity.calories)"
-        :compareValue="formatCalories(t, comparedActivity.calories)"
+        :comparedValue="formatCalories(t, comparedActivity.calories)"
         :compare="true"
       />
     </div>
@@ -405,7 +405,7 @@ import { push } from 'notivue'
 // Importing the components
 import LoadingComponent from '@/components/GeneralComponents/LoadingComponent.vue'
 import UserAvatarComponent from '@/components/Users/UserAvatarComponent.vue'
-import ActivityMetricComapreComponent from './ActivityMetricComapreComponent.vue'
+import ActivityCompareMetricComponent from './ActivityCompareMetricComponent.vue'
 // Importing constants
 import { INTEGRATION_LOGOS } from '@/constants/integrationLogoConstants'
 // Importing the services

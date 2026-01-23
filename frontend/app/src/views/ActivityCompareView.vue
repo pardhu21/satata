@@ -57,7 +57,7 @@
           (!authStore.isAuthenticated && activity.hide_map === false))
       "
     >
-      <ActivityMapCompareComponent
+      <ActivityCompareMapComponent
         :activity="activity"
         :comparedActivity="comparedActivity"
         source="activity"
@@ -90,7 +90,7 @@
           (activityActivityStreams && activityActivityStreams.length > 0))
       "
     >
-      <ActivityMandAbovePillsCompareComponent
+      <ActivityCompareMandAbovePillsComponent
         :activity="activity"
         :comparedActivity="comparedActivity"
         :activityActivityLaps="activityActivityLaps"
@@ -154,8 +154,8 @@ import { useServerSettingsStore } from '@/stores/serverSettingsStore'
 import { push } from 'notivue'
 // Importing the components
 import ActivityCompareSummaryComponent from '@/components/Activities/ActivityCompareSummaryComponent.vue'
-import ActivityMapCompareComponent from '@/components/Activities/ActivityMapCompareComponent.vue'
-import ActivityMandAbovePillsCompareComponent from '@/components/Activities/ActivityMandAbovePillsCompareComponent.vue'
+import ActivityCompareMapComponent from '@/components/Activities/ActivityCompareMapComponent.vue'
+import ActivityCompareMandAbovePillsComponent from '@/components/Activities/ActivityCompareMandAbovePillsComponent.vue'
 import ActivityCompareBellowMPillsComponent from '@/components/Activities/ActivityCompareBellowMPillsComponent.vue'
 import LoadingComponent from '@/components/GeneralComponents/LoadingComponent.vue'
 import BackButtonComponent from '@/components/GeneralComponents/BackButtonComponent.vue'

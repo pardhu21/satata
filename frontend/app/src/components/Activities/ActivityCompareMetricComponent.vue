@@ -11,7 +11,7 @@
         <div class="border-start border-opacity-50"></div>
       </div>
 
-      <span class="flex-fill text-center">{{ compareValue }}</span>
+      <span class="flex-fill text-center">{{ comparedValue }}</span>
     </div>
 
     <div v-else class="mt-1">
@@ -24,7 +24,7 @@
 defineProps({
   label: String,
   value: String,
-  compareValue: String,
+  comparedValue: String,
   compare: Boolean
 })
 </script>

@@ -240,14 +240,14 @@ const velPresent = ref(false)
 const pacePresent = ref(false)
 const hrZones = ref({})
 
-// Compare activity flags
-const compareHrPresent = ref(false)
-const comparePowerPresent = ref(false)
-const compareElePresent = ref(false)
-const compareCadPresent = ref(false)
-const compareVelPresent = ref(false)
-const comparePacePresent = ref(false)
-const compareHrZones = ref({})
+// Compared activity flags
+const comparedHrPresent = ref(false)
+const comparedPowerPresent = ref(false)
+const comparedElePresent = ref(false)
+const comparedCadPresent = ref(false)
+const comparedVelPresent = ref(false)
+const comparedPacePresent = ref(false)
+const comparedHrZones = ref({})
 
 // Methods
 function selectGraph(type) {
@@ -304,19 +304,19 @@ onMounted(async () => {
     if (props.comparedActivityActivityStreams && props.comparedActivityActivityStreams.length > 0) {
       for (const element of props.comparedActivityActivityStreams) {
         if (element.stream_type === 1) {
-          compareHrPresent.value = true
+          comparedHrPresent.value = true
           const hrStream = props.comparedActivityActivityStreams.find(
             (stream) => stream.hr_zone_percentages
           )
-          compareHrZones.value =
+          comparedHrZones.value =
             hrStream && hrStream.hr_zone_percentages ? hrStream.hr_zone_percentages : {}
         }
 
-        if (element.stream_type === 2) comparePowerPresent.value = true
-        if (element.stream_type === 3) compareCadPresent.value = true
+        if (element.stream_type === 2) comparedPowerPresent.value = true
+        if (element.stream_type === 3) comparedCadPresent.value = true
 
         if (element.stream_type === 4 && !activityTypeIsSwimming(props.comparedActivity)) {
-          compareElePresent.value = true
+          comparedElePresent.value = true
         }
 
         if (
@@ -325,7 +325,7 @@ onMounted(async () => {
             activityTypeIsSailing(props.comparedActivity) ||
             activityTypeIsWindsurf(props.comparedActivity))
         ) {
-          compareVelPresent.value = true
+          comparedVelPresent.value = true
         }
 
         if (
@@ -334,7 +334,7 @@ onMounted(async () => {
           activityTypeNotSailing(props.comparedActivity) &&
           activityTypeNotWindsurf(props.comparedActivity)
         ) {
-          comparePacePresent.value = true
+          comparedPacePresent.value = true
         }
       }
     }
@@ -342,28 +342,28 @@ onMounted(async () => {
     /* ===========================
        GRAPH TABS (intersection)
     ============================ */
-    if (hrPresent.value && compareHrPresent.value) {
+    if (hrPresent.value && comparedHrPresent.value) {
       graphItems.value.push({
         type: 'hr',
         label: t('activityMandAbovePillsComponent.labelGraphHR')
       })
     }
 
-    if (Object.keys(hrZones.value).length > 0 && Object.keys(compareHrZones.value).length > 0) {
+    if (Object.keys(hrZones.value).length > 0 && Object.keys(comparedHrZones.value).length > 0) {
       graphItems.value.push({
         type: 'hrZones',
         label: t('activityMandAbovePillsComponent.labelHRZones')
       })
     }
 
-    if (powerPresent.value && comparePowerPresent.value) {
+    if (powerPresent.value && comparedPowerPresent.value) {
       graphItems.value.push({
         type: 'power',
         label: t('activityMandAbovePillsComponent.labelGraphPower')
       })
     }
 
-    if (cadPresent.value && compareCadPresent.value) {
+    if (cadPresent.value && comparedCadPresent.value) {
       graphItems.value.push({
         type: 'cad',
         label: activityTypeIsSwimming(props.activity)
@@ -372,21 +372,21 @@ onMounted(async () => {
       })
     }
 
-    if (elePresent.value && compareElePresent.value) {
+    if (elePresent.value && comparedElePresent.value) {
       graphItems.value.push({
         type: 'ele',
         label: t('activityMandAbovePillsComponent.labelGraphElevation')
       })
     }
 
-    if (velPresent.value && compareVelPresent.value) {
+    if (velPresent.value && comparedVelPresent.value) {
       graphItems.value.push({
         type: 'vel',
         label: t('activityMandAbovePillsComponent.labelGraphVelocity')
       })
     }
 
-    if (pacePresent.value && comparePacePresent.value) {
+    if (pacePresent.value && comparedPacePresent.value) {
       graphItems.value.push({
         type: 'pace',
         label: t('activityMandAbovePillsComponent.labelGraphPace')

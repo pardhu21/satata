@@ -148,8 +148,6 @@ export default {
   setup(props, { emit }) {
     const { t } = useI18n()
 
-    console.log('comapare-mode', props.compareMode)
-
     function changeSort(columnName) {
       emit('sortChanged', columnName)
     }

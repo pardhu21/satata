@@ -23,7 +23,6 @@ import {
   activityTypeIsWalking
 } from '@/utils/activityUtils'
 import { metersToFeet, kmToMiles } from '@/utils/unitsUtils'
-import { activityStreams } from '@/services/activityStreams'
 
 export default {
   props: {
