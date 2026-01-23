@@ -152,9 +152,11 @@
       tabindex="1"
       v-if="activityActivityLaps && activityActivityLaps.length > 0"
     >
-      <ActivityLapsComponent
+      <ActivityCompareLapsComponent
         :activity="activity"
+        :comparedActivity="comparedActivity"
         :activityActivityLaps="activityActivityLaps"
+        :comparedActivityActivityLaps="comparedActivityActivityLaps"
         :units="units"
       />
     </div>
@@ -183,7 +185,7 @@ import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 // Importing the components
-import ActivityLapsComponent from '@/components/Activities/ActivityLapsComponent.vue'
+import ActivityCompareLapsComponent from '@/components/Activities/ActivityCompareLapsComponent.vue'
 import ActivityCompareStreamsLineChartComponent from '@/components/Activities/ActivityCompareStreamsLineChartComponent.vue'
 import ActivityWorkoutStepsComponent from '@/components/Activities/ActivityWorkoutStepsComponent.vue'
 import BarChartComponent from '@/components/GeneralComponents/BarChartComponent.vue'

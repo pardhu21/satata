@@ -1,9 +1,11 @@
 <template>
   <div if="activity" class="fw-lighter">
     <!-- laps -->
-    <ActivityLapsComponent
+    <ActivityCompareLapsComponent
       :activity="activity"
+      :comparedActivity="comparedActivity"
       :activityActivityLaps="activityActivityLaps"
+      :comparedActivityActivityLaps="comparedActivityActivityLaps"
       :units="units"
       v-if="activityActivityLaps && activityActivityLaps.length > 0"
     />
@@ -465,7 +467,7 @@
 import { ref, onMounted, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 // Importing the components
-import ActivityLapsComponent from '@/components/Activities/ActivityLapsComponent.vue'
+import ActivityCompareLapsComponent from '@/components/Activities/ActivityCompareLapsComponent.vue'
 import ActivityCompareStreamsLineChartComponent from '@/components/Activities/ActivityCompareStreamsLineChartComponent.vue'
 import ActivityWorkoutStepsComponent from '@/components/Activities/ActivityWorkoutStepsComponent.vue'
 import BarChartComponent from '@/components/GeneralComponents/BarChartComponent.vue'
@@ -707,7 +709,9 @@ onMounted(async () => {
       if (Number(props.units) === 1) {
         comparedFormattedPace.value = computed(() => formatPaceMetric(props.comparedActivity.pace))
       } else {
-        comparedFormattedPace.value = computed(() => formatPaceImperial(props.comparedActivity.pace))
+        comparedFormattedPace.value = computed(() =>
+          formatPaceImperial(props.comparedActivity.pace)
+        )
       }
     }
   } catch (error) {
