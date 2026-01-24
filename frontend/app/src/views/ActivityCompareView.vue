@@ -129,12 +129,12 @@
         :units="units"
         :activityActivityExerciseTitles="activityActivityExerciseTitles"
         :activityActivitySets="activityActivitySets"
-        :compareActivity="comparedActivity"
-        :compareActivityActivityLaps="comparedActivityActivityLaps"
-        :compareActivityActivityWorkoutSteps="comparedActivityActivityWorkoutSteps"
-        :compareActivityActivityStreams="comparedActivityActivityStreams"
-        :compareActivityActivityExerciseTitles="comparedActivityActivityExerciseTitles"
-        :compareActivityActivitySets="comparedActivityActivitySets"
+        :comparedActivity="comparedActivity"
+        :comparedActivityActivityLaps="comparedActivityActivityLaps"
+        :comparedActivityActivityWorkoutSteps="comparedActivityActivityWorkoutSteps"
+        :comparedActivityActivityStreams="comparedActivityActivityStreams"
+        :comparedActivityActivityExerciseTitles="comparedActivityActivityExerciseTitles"
+        :comparedActivityActivitySets="comparedActivityActivitySets"
       />
     </div>
 
