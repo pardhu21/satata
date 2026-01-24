@@ -52,6 +52,12 @@ const routes = [
     meta: { requiresAuth: false }
   },
   {
+    path: '/activity-compare/:id1/:id2',
+    name: 'activity-compare',
+    component: () => import('../views/ActivityCompareView.vue'),
+    meta: { requiresAuth: false }
+  },
+  {
     path: '/activities',
     name: 'activities',
     component: () => import('../views/ActivitiesView.vue'),

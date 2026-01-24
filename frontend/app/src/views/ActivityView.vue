@@ -233,6 +233,10 @@
       />
     </div>
 
+    <div class="d-block" v-if="!isLoading">
+      <ActivityCompareSelectionComponent v-if="activity" :activity="activity" />
+    </div>
+
     <!-- back button -->
     <BackButtonComponent />
   </div>
@@ -254,6 +258,7 @@ import ActivityMandAbovePillsComponent from '@/components/Activities/ActivityMan
 import ActivityBellowMPillsComponent from '@/components/Activities/ActivityBellowMPillsComponent.vue'
 import LoadingComponent from '@/components/GeneralComponents/LoadingComponent.vue'
 import BackButtonComponent from '@/components/GeneralComponents/BackButtonComponent.vue'
+import ActivityCompareSelectionComponent from '@/components/Activities/ActivityCompareSelectionComponent.vue'
 import ModalComponent from '@/components/Modals/ModalComponent.vue'
 import AddGearToActivityModalComponent from '@/components/Activities/Modals/AddGearToActivityModalComponent.vue'
 import AlertComponent from '@/components/GeneralComponents/AlertComponent.vue'

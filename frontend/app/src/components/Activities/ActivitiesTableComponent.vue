@@ -18,30 +18,26 @@
               <font-awesome-icon :icon="sortIcon('name')" class="ms-1 opacity-75" />
             </span>
           </th>
-          <th style="cursor: pointer; white-space: nowrap" @click="changeSort('location')">
-            <span class="d-flex align-items-center flex-nowrap">
-              {{ $t('activitiesTableComponent.headerLocation') }}
-              <font-awesome-icon :icon="sortIcon('location')" class="ms-1 opacity-75" />
-            </span>
-          </th>
-          <th
-            class="d-none d-md-table-cell"
-            style="cursor: pointer; white-space: nowrap"
-            @click="changeSort('start_time')"
-          >
+          <th style="cursor: pointer; white-space: nowrap" @click="changeSort('start_time')">
             <span class="d-flex align-items-center flex-nowrap">
               {{ $t('activitiesTableComponent.headerStartTime') }}
               <font-awesome-icon :icon="sortIcon('start_time')" class="ms-1 opacity-75" />
             </span>
           </th>
-          <th
-            class="d-none d-md-table-cell"
-            style="cursor: pointer; white-space: nowrap"
-            @click="changeSort('duration')"
-          >
+          <th style="cursor: pointer; white-space: nowrap" @click="changeSort('duration')">
             <span class="d-flex align-items-center flex-nowrap">
               {{ $t('activitiesTableComponent.headerDuration') }}
               <font-awesome-icon :icon="sortIcon('duration')" class="ms-1 opacity-75" />
+            </span>
+          </th>
+          <th
+            class="d-none d-md-table-cell"
+            style="cursor: pointer; white-space: nowrap"
+            @click="changeSort('location')"
+          >
+            <span class="d-flex align-items-center flex-nowrap">
+              {{ $t('activitiesTableComponent.headerLocation') }}
+              <font-awesome-icon :icon="sortIcon('location')" class="ms-1 opacity-75" />
             </span>
           </th>
           <th
@@ -97,8 +93,13 @@
         </tr>
       </thead>
       <tbody>
-        <tr v-for="activity in activities" :key="activity.id">
-          <ActivitiesTableRowComponent :activity="activity" />
+        <tr
+          v-for="activity in activities"
+          :key="activity.id"
+          @click="onRowClick(activity.id)"
+          :class="rowClass(activity.id)"
+        >
+          <ActivitiesTableRowComponent :activity="activity" :compare-mode="compareMode" />
         </tr>
       </tbody>
     </table>
@@ -127,9 +128,23 @@ export default {
     sortOrder: {
       type: String,
       default: 'desc'
+    },
+    // compare-mode feature flag
+    compareMode: {
+      type: Boolean,
+      default: false
+    },
+    // only used when compareMode === true
+    selectedActivityId: {
+      type: Number,
+      default: null
+    },
+    currentActivityId: {
+      type: Number,
+      default: null
     }
   },
-  emits: ['sortChanged'],
+  emits: ['sortChanged', 'rowSelected'],
   setup(props, { emit }) {
     const { t } = useI18n()
 
@@ -147,10 +162,29 @@ export default {
       return ['fas', 'sort-down'] // Descending icon
     }
 
+    function onRowClick(activityId) {
+      if (!props.compareMode) return
+      if (props.currentActivityId && activityId === props.currentActivityId) return
+
+      emit('rowSelected', activityId)
+    }
+
+    function rowClass(activityId) {
+      if (!props.compareMode) return {}
+
+      return {
+        'table-primary': activityId === props.selectedActivityId,
+        'table-secondary': activityId === props.currentActivityId,
+        'opacity-50': activityId === props.currentActivityId
+      }
+    }
+
     return {
       t,
       changeSort,
-      sortIcon
+      sortIcon,
+      onRowClick,
+      rowClass
     }
   }
 }

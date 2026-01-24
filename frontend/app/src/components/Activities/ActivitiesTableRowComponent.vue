@@ -4,16 +4,21 @@
   </td>
   <td>
     <router-link
+      v-if="!compareMode"
       :to="{ name: 'activity', params: { id: activity.id } }"
       class="link-body-emphasis link-underline-opacity-0 link-underline-opacity-100-hover"
     >
       <span v-if="activity.name === 'Workout'">{{ formatName(activity, t) }}</span>
       <span v-else>{{ activity.name }}</span>
     </router-link>
+    <span v-else>
+      <span v-if="activity.name === 'Workout'">{{ formatName(activity, t) }}</span>
+      <span v-else>{{ activity.name }}</span>
+    </span>
   </td>
-  <td>{{ formatLocation(t, activity) }}</td>
-  <td class="d-none d-md-table-cell">{{ formatDateTime(t, activity.start_time_tz_applied) }}</td>
-  <td class="d-none d-md-table-cell">{{ formatDuration(t, activity.total_timer_time) }}</td>
+  <td>{{ formatDateTime(t, activity.start_time_tz_applied) }}</td>
+  <td>{{ formatDuration(t, activity.total_timer_time) }}</td>
+  <td class="d-none d-md-table-cell">{{ formatLocation(t, activity) }}</td>
   <td class="d-none d-md-table-cell">{{ formatDistance(t, activity, authStore.user.units) }}</td>
   <td class="d-none d-md-table-cell">
     <span
@@ -69,6 +74,10 @@ const props = defineProps({
   activity: {
     type: Object,
     required: true
+  },
+  compareMode: {
+    type: Boolean,
+    default: false
   }
 })
 
