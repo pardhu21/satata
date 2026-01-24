@@ -217,7 +217,7 @@ const props = defineProps({
   activityActivityStreams: { type: [Object, null], required: true },
   comparedActivityActivityStreams: { type: [Object, null], required: true },
 
-  units: { type: Number, default: 1 },
+  units: { type: String, default: 'metric' },
 
   activityActivityExerciseTitles: { type: [Object, null], required: true },
   comparedActivityActivityExerciseTitles: { type: [Object, null], required: true },

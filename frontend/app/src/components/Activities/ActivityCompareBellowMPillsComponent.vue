@@ -94,7 +94,7 @@
         <div class="d-flex justify-content-between mt-2" v-if="activity.average_speed">
           <span>{{ $t('activityBellowMPillsComponent.labelAvgSpeed') }}</span>
           <span>
-            <span v-if="Number(units) === 1">
+            <span v-if="units === 'metric'">
               <b
                 >{{ formatAverageSpeedMetric(activity.average_speed) }}
                 {{ $t('generalItems.unitsKmH') }}</b
@@ -111,7 +111,7 @@
         <div class="d-flex justify-content-between mt-2" v-if="activity.max_speed">
           <span>{{ $t('activityBellowMPillsComponent.labelMaxSpeed') }}</span>
           <span>
-            <span v-if="Number(units) === 1">
+            <span v-if="units === 'metric'">
               <b
                 >{{ formatAverageSpeedMetric(activity.max_speed) }}
                 {{ $t('generalItems.unitsKmH') }}</b
@@ -133,7 +133,7 @@
         <div class="d-flex justify-content-between mt-2" v-if="comparedActivity.average_speed">
           <span>{{ $t('activityBellowMPillsComponent.labelAvgSpeed') }}</span>
           <span>
-            <span v-if="Number(units) === 1">
+            <span v-if="units === 'metric'">
               <b
                 >{{ formatAverageSpeedMetric(comparedActivity.average_speed) }}
                 {{ $t('generalItems.unitsKmH') }}</b
@@ -150,7 +150,7 @@
         <div class="d-flex justify-content-between mt-2" v-if="comparedActivity.max_speed">
           <span>{{ $t('activityBellowMPillsComponent.labelMaxSpeed') }}</span>
           <span>
-            <span v-if="Number(units) === 1">
+            <span v-if="units === 'metric'">
               <b
                 >{{ formatAverageSpeedMetric(comparedActivity.max_speed) }}
                 {{ $t('generalItems.unitsKmH') }}</b
@@ -396,7 +396,7 @@
         <div class="text-muted small mb-2">{{ activity.name || 'Activity 1' }}</div>
         <div class="d-flex justify-content-between mt-2" v-if="activity.elevation_gain">
           <span>{{ $t('activityBellowMPillsComponent.labelElevationGain') }}</span>
-          <span v-if="Number(units) === 1">
+          <span v-if="units === 'metric'">
             <b>{{ activity.elevation_gain }} {{ $t('generalItems.unitsM') }}</b>
           </span>
           <span v-else>
@@ -408,7 +408,7 @@
         </div>
         <div class="d-flex justify-content-between mt-2" v-if="activity.elevation_loss">
           <span>{{ $t('activityBellowMPillsComponent.labelElevationLoss') }}</span>
-          <span v-if="Number(units) === 1">
+          <span v-if="units === 'metric'">
             <b>{{ activity.elevation_loss }} {{ $t('generalItems.unitsM') }}</b>
           </span>
           <span v-else>
@@ -425,7 +425,7 @@
         <div class="text-muted small mb-2">{{ comparedActivity.name || 'Activity 2' }}</div>
         <div class="d-flex justify-content-between mt-2" v-if="comparedActivity.elevation_gain">
           <span>{{ $t('activityBellowMPillsComponent.labelElevationGain') }}</span>
-          <span v-if="Number(units) === 1">
+          <span v-if="units === 'metric'">
             <b>{{ comparedActivity.elevation_gain }} {{ $t('generalItems.unitsM') }}</b>
           </span>
           <span v-else>
@@ -437,7 +437,7 @@
         </div>
         <div class="d-flex justify-content-between mt-2" v-if="comparedActivity.elevation_loss">
           <span>{{ $t('activityBellowMPillsComponent.labelElevationLoss') }}</span>
-          <span v-if="Number(units) === 1">
+          <span v-if="units === 'metric'">
             <b>{{ comparedActivity.elevation_loss }} {{ $t('generalItems.unitsM') }}</b>
           </span>
           <span v-else>
@@ -512,10 +512,6 @@ const props = defineProps({
     type: [Object, null],
     required: true
   },
-  units: {
-    type: Number,
-    default: 1
-  },
   activityActivityExerciseTitles: {
     type: [Object, null],
     required: true
@@ -541,8 +537,8 @@ const props = defineProps({
     required: true
   },
   units: {
-    type: Number,
-    default: 1
+    type: String,
+    default: 'metric'
   },
   comparedActivityActivityExerciseTitles: {
     type: [Object, null],
@@ -675,13 +671,14 @@ onMounted(async () => {
 
   try {
     if (activityTypeIsSwimming(props.activity) || activityTypeIsRowing(props.activity)) {
-      if (Number(props.units) === 1) {
+      if (props.units === 'metric') {
         formattedPace.value = computed(() => formatPaceSwimMetric(props.activity.pace))
+        console.log('formattedPace metric swim', formattedPace.value)
       } else {
         formattedPace.value = computed(() => formatPaceSwimImperial(props.activity.pace))
       }
     } else {
-      if (Number(props.units) === 1) {
+      if (props.units === 'metric') {
         formattedPace.value = computed(() => formatPaceMetric(props.activity.pace))
       } else {
         formattedPace.value = computed(() => formatPaceImperial(props.activity.pace))
@@ -696,7 +693,7 @@ onMounted(async () => {
       activityTypeIsSwimming(props.comparedActivity) ||
       activityTypeIsRowing(props.comparedActivity)
     ) {
-      if (Number(props.units) === 1) {
+      if (props.units === 'metric') {
         comparedFormattedPace.value = computed(() =>
           formatPaceSwimMetric(props.comparedActivity.pace)
         )
@@ -706,7 +703,7 @@ onMounted(async () => {
         )
       }
     } else {
-      if (Number(props.units) === 1) {
+      if (props.units === 'metric') {
         comparedFormattedPace.value = computed(() => formatPaceMetric(props.comparedActivity.pace))
       } else {
         comparedFormattedPace.value = computed(() =>
