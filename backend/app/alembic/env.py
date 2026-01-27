@@ -45,6 +45,17 @@ from core.database import Base, engine
 # access to the values within the .ini file in use.
 config = context.config
 
+# Set version_locations if not already set
+if config.get_main_option("version_locations"):
+    # Already configured in alembic.ini
+    pass
+else:
+    # Programmatically set version locations
+    config.set_main_option(
+        "version_locations",
+        "alembic/versions custom_migrations/versions"
+    )
+
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
 if config.attributes.get("configure_logger", True):
