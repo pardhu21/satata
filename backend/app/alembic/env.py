@@ -17,6 +17,10 @@ import activities.activity_media.models
 import activities.activity_sets.models
 import activities.activity_streams.models
 import activities.activity_workout_steps.models
+import activities.activity_ai_insights.models
+import activities.activity_delta_records.models
+import activities.activity_categories.models
+import activities.activity_types.models
 import followers.models
 import gears.gear.models
 import gears.gear_components.models
@@ -37,6 +41,8 @@ import users.users_default_gear.models
 import users.users_identity_providers.models
 import users.users_integrations.models
 import users.users_privacy_settings.models
+import users.user_category_rules.models
+import users.user_activity_stats.models
 
 # import Base and engine from database file
 from core.database import Base, engine
