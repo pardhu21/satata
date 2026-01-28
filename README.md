@@ -18,6 +18,23 @@ It is <u>NOT</u> the official Endurain repository.
 
 <br/>
 <br/>
+
+## Fork-Specific Features & Design Notes
+
+> **Note:** This fork introduces a couple of features (one for now) in addition to upstream project (Endurain). 
+> Active effort is being made to stay closely aligned with the original repository while iterating on new functionality.
+
+Detailed explanations for each feature can be found in the corresponding Wiki pages:
+
+<a href="https://github.com/pardhu21/satata/wiki/Activity-comparision" title="Activity comparision" >**Activity comparision**</a>
+<br/>
+<a href="https://github.com/pardhu21/satata/wiki/%22AI%22-insights-plan" title="AI Insights Pipeline" >**AI Insights Pipeline**</a>
+
+Contributions and feedback are welcome, and all feature work aims to remain compatible with upstream changes wherever possible.
+
+
+<br/>
+<br/>
 <br/>
 <br/>
 
