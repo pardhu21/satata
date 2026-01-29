@@ -29,6 +29,7 @@ import health.health_steps.models
 import health.health_targets.models
 import health.health_weight.models
 import migrations.models
+import migrations_satata.models
 import notifications.models
 import password_reset_tokens.models
 import sign_up_tokens.models
