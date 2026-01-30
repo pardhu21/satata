@@ -2,14 +2,14 @@ from sqlalchemy.orm import Session
 
 import migrations_satata.crud as migrations_crud
 import migrations_satata.migration_1 as migrations_migration_1
+import migrations_satata.migration_2 as migrations_migration_2
+import migrations_satata.migration_3 as migrations_migration_3
 
 import core.logger as core_logger
 
 
 async def check_migrations_not_executed(db: Session):
     migrations_not_executed = migrations_crud.get_migrations_not_executed(db)
-
-    print( "MIGRATIONS NOT EXECUTED SATATA:", migrations_not_executed )
 
     if migrations_not_executed:
         for migration in migrations_not_executed:
@@ -21,3 +21,11 @@ async def check_migrations_not_executed(db: Session):
             if migration.id == 1:
                 # Execute the migration
                 migrations_migration_1.process_migration_1(db)
+            
+            if migration.id == 2:
+                # Execute the migration
+                migrations_migration_2.process_migration_2(db)
+
+            if migration.id == 3:
+                # Execute the migration
+                migrations_migration_3.process_migration_3(db)

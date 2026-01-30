@@ -31,6 +31,14 @@ def upgrade() -> None:
         "INSERT INTO migrations_satata (name, description, executed) VALUES "
         "('migration_1', 'Insert canonical activity types from activity utils.', false)"
     )
+    op.execute(
+        "INSERT INTO migrations_satata (name, description, executed) VALUES "
+        "('migration_2', 'Insert canonical activity categories from activity category utils.', false)"
+    )
+    op.execute(
+        "INSERT INTO migrations_satata (name, description, executed) VALUES "
+        "('migration_3', 'Add default user category rules to existing users.', false)"
+    )
     # ### end Alembic commands ###
 
 
