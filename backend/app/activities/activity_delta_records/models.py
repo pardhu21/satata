@@ -19,6 +19,14 @@ class ActivityDeltaRecords(Base):
         comment="Activity delta record ID",
     )
 
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+        comment="User ID that this delta record belongs to",
+    )
+
     activity_id = Column(
         Integer,
         ForeignKey("activities.id", ondelete="CASCADE"),
@@ -27,12 +35,20 @@ class ActivityDeltaRecords(Base):
         comment="Activity ID this delta record belongs to",
     )
 
-    user_category_id = Column(
+    activity_type_id = Column(
         Integer,
-        ForeignKey("user_category_rules.id", ondelete="CASCADE"),
+        ForeignKey("activity_types.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+        comment="Activity type ID",
+    )
+
+    category_id = Column(
+        Integer,
+        ForeignKey("activity_categories.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
-        comment="User category rule ID used as baseline",
+        comment="Activity category ID used as baseline",
     )
 
     delta_distance = Column(
@@ -57,6 +73,30 @@ class ActivityDeltaRecords(Base):
         Float,
         nullable=True,
         comment="Delta heart rate percentage compared to baseline",
+    )
+
+    delta_avg_pace = Column(
+        Float,
+        nullable=True,
+        comment="Delta average pace (seconds per km) compared to baseline",
+    )
+
+    delta_avg_pace_pct = Column(
+        Float,
+        nullable=True,
+        comment="Delta average pace percentage compared to baseline",
+    )
+
+    delta_duration = Column(
+        Float,
+        nullable=True,
+        comment="Delta moving time in seconds compared to baseline",
+    )
+
+    delta_duration_pct = Column(
+        Float,
+        nullable=True,
+        comment="Delta moving time percentage compared to baseline",
     )
 
     delta_elevation_gain = Column(
@@ -97,3 +137,26 @@ class ActivityDeltaRecords(Base):
         onupdate=func.now(),
         comment="Delta record last update timestamp",
     )
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "user_id": self.user_id,
+            "activity_id": self.activity_id,
+            "activity_type_id": self.activity_type_id,
+            "category_id": self.category_id,
+            "delta_distance": self.delta_distance,
+            "delta_distance_pct": self.delta_distance_pct,
+            "delta_hr": self.delta_hr,
+            "delta_hr_pct": self.delta_hr_pct,
+            "delta_avg_pace": self.delta_avg_pace,
+            "delta_avg_pace_pct": self.delta_avg_pace_pct,
+            "delta_duration": self.delta_duration,
+            "delta_duration_pct": self.delta_duration_pct,
+            "delta_elevation_gain": self.delta_elevation_gain,
+            "delta_elevation_gain_pct": self.delta_elevation_gain_pct,
+            "delta_elevation_loss": self.delta_elevation_loss,
+            "delta_elevation_loss_pct": self.delta_elevation_loss_pct,
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
+        }

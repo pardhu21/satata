@@ -1,3 +1,4 @@
+from datetime import datetime
 from pydantic import BaseModel
 
 
@@ -6,7 +7,7 @@ class ActivityAIInsight(BaseModel):
     activity_id: int | None = None
     insight_text: str | None = None
     model_used: str | None = None
-    created_at: str | None = None
+    created_at: datetime | None = None
 
     model_config = {"from_attributes": True}
 

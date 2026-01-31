@@ -4,6 +4,7 @@ from urllib.parse import unquote
 import activities.activity.models as activities_models
 import activities.activity.schema as activities_schema
 import activities.activity.utils as activities_utils
+import activities.activity_ai_insights.utils as activity_ai_insights_utils
 
 import followers.models as followers_models
 
@@ -1226,6 +1227,8 @@ async def create_activity(
                 await notifications_utils.create_new_activity_notification(
                     activity.user_id, new_activity.id, websocket_manager
                 )
+
+        activity_ai_insights_utils.get_activity_ai_insights(activity, db)
 
         # Return the activity
         return activity

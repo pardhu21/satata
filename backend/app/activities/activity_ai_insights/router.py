@@ -16,7 +16,7 @@ router = APIRouter()
 
 @router.get(
     "/activity_id/{activity_id}",
-    response_model=list[schema.ActivityAIInsight] | None,
+    response_model=schema.ActivityAIInsight | None,
 )
 async def read_insights_for_activity(
     activity_id: int,

@@ -1,3 +1,4 @@
+from operator import and_
 import users.user_category_rules.models as models
 import users.user_category_rules.schema as schema
 import users.user_activity_stats.crud as stats_crud
@@ -55,19 +56,6 @@ def create_rule(rule_in: schema.UserCategoryRuleCreate, db: Session):
         db.add(db_obj)
         db.commit()
         db.refresh(db_obj)
-        # Optionally refresh related stats
-        try:
-            stats_crud.create_stats(
-                schema.UserActivityStatsCreate(
-                    activity_type_id=rule_in.activity_type_id,
-                    user_category_id=db_obj.id,
-                ),
-                db,
-            )
-        except Exception:
-            # non-critical
-            pass
-        return db_obj
     except Exception as err:
         db.rollback()
         core_logger.print_to_log(
@@ -140,6 +128,27 @@ def delete_rule(rule_id: int, token_user_id: int, db: Session):
         db.rollback()
         core_logger.print_to_log(
             f"Error in delete_rule: {err}", "error", exc=err
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal Server Error",
+        ) from err
+
+
+def get_rules_by_user_activity_type(user_id: int, activity_type_id: int, db: Session):
+    try:
+        rules = (
+            db.query(models.UserCategoryRules)
+            .filter(and_(
+                models.UserCategoryRules.user_id == user_id,
+                models.UserCategoryRules.activity_type_id == activity_type_id,
+            ))
+            .all()
+        )
+        return rules if rules else None
+    except Exception as err:
+        core_logger.print_to_log(
+            f"Error in get_rules_by_user_activity_type: {err}", "error", exc=err
         )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

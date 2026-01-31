@@ -58,14 +58,19 @@ def get_insights_for_activity(activity_id: int, token_user_id: int, db: Session)
         if not activity:
             return None
 
-        insights = (
+        insight = (
             db.query(models.ActivityAIInsights)
             .filter(models.ActivityAIInsights.activity_id == activity_id)
-            .all()
+            .order_by(models.ActivityAIInsights.created_at.desc())
+            .first()
         )
 
-        return insights if insights else None
+        if not insight:
+            return None
+
+        return insight
     except Exception as err:
+        print(err)
         core_logger.print_to_log(
             f"Error in get_insights_for_activity: {err}", "error", exc=err
         )

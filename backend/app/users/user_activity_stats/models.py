@@ -19,6 +19,14 @@ class UserActivityStats(Base):
         comment="User activity statistics ID",
     )
 
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+        comment="User ID that this delta record belongs to",
+    )
+
     activity_type_id = Column(
         Integer,
         ForeignKey("activity_types.id"),
@@ -27,12 +35,12 @@ class UserActivityStats(Base):
         comment="Activity type ID",
     )
 
-    user_category_id = Column(
+    category_id = Column(
         Integer,
-        ForeignKey("user_category_rules.id", ondelete="CASCADE"),
+        ForeignKey("activity_categories.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
-        comment="User category rule ID",
+        comment="Activity category ID used as baseline",
     )
 
     avg_distance = Column(
@@ -57,6 +65,30 @@ class UserActivityStats(Base):
         Float,
         nullable=True,
         comment="Welford M2 value for heart rate variance",
+    )
+
+    avg_pace = Column(
+        Float,
+        nullable=True,
+        comment="Average pace in seconds per kilometer",
+    )
+
+    m2_pace = Column(
+        Float,
+        nullable=True,
+        comment="Welford M2 value for pace variance",
+    )
+
+    avg_duration = Column(
+        Float,
+        nullable=True,
+        comment="Average moving time in seconds",
+    )
+
+    m2_duration = Column(
+        Float,
+        nullable=True,
+        comment="Welford M2 value for moving time variance",
     )
 
     avg_elevation_gain = Column(

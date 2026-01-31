@@ -41,12 +41,17 @@ def get_stats_by_id(stats_id: int, db: Session):
 def create_stats(stats_in: schema.UserActivityStatsCreate, db: Session):
     try:
         db_obj = models.UserActivityStats(
+            user_id=stats_in.user_id,
             activity_type_id=stats_in.activity_type_id,
-            user_category_id=stats_in.user_category_id,
+            category_id=stats_in.category_id,
             avg_distance=stats_in.avg_distance,
             m2_distance=stats_in.m2_distance,
             avg_heart_rate=stats_in.avg_heart_rate,
             m2_heart_rate=stats_in.m2_heart_rate,
+            avg_pace=stats_in.avg_pace,
+            m2_pace=stats_in.m2_pace,
+            avg_duration=stats_in.avg_duration,
+            m2_duration=stats_in.m2_duration,
             avg_elevation_gain=stats_in.avg_elevation_gain,
             m2_elevation_gain=stats_in.m2_elevation_gain,
             avg_elevation_loss=stats_in.avg_elevation_loss,
@@ -58,6 +63,7 @@ def create_stats(stats_in: schema.UserActivityStatsCreate, db: Session):
         db.refresh(db_obj)
         return db_obj
     except Exception as err:
+        print(err)
         db.rollback()
         core_logger.print_to_log(
             f"Error in create_stats: {err}", "error", exc=err
@@ -82,6 +88,10 @@ def edit_stats(stats_id: int, stats_edit: schema.UserActivityStatsEdit, db: Sess
             "m2_distance",
             "avg_heart_rate",
             "m2_heart_rate",
+            "avg_pace",
+            "m2_pace",
+            "avg_duration",
+            "m2_duration",
             "avg_elevation_gain",
             "m2_elevation_gain",
             "avg_elevation_loss",
@@ -106,6 +116,78 @@ def edit_stats(stats_id: int, stats_edit: schema.UserActivityStatsEdit, db: Sess
             detail="Internal Server Error",
         ) from err
 
+def create_or_update_stats(
+    stats_in: schema.UserActivityStatsCreate,
+    db: Session,
+):
+    try:
+        db_obj = (
+            db.query(models.UserActivityStats)
+            .filter(
+                models.UserActivityStats.user_id == stats_in.user_id,
+                models.UserActivityStats.activity_type_id == stats_in.activity_type_id,
+                models.UserActivityStats.category_id == stats_in.category_id,
+            )
+            .one_or_none()
+        )
+
+        if db_obj:
+            # update existing row
+            for field in [
+                "avg_distance",
+                "m2_distance",
+                "avg_heart_rate",
+                "m2_heart_rate",
+                "avg_pace",
+                "m2_pace",
+                "avg_duration",
+                "m2_duration",
+                "avg_elevation_gain",
+                "m2_elevation_gain",
+                "avg_elevation_loss",
+                "m2_elevation_loss",
+                "total_count",
+            ]:
+                val = getattr(stats_in, field)
+                if val is not None:
+                    setattr(db_obj, field, val)
+
+        else:
+            # create new row
+            db_obj = models.UserActivityStats(
+                user_id=stats_in.user_id,
+                activity_type_id=stats_in.activity_type_id,
+                category_id=stats_in.category_id,
+                avg_distance=stats_in.avg_distance,
+                m2_distance=stats_in.m2_distance,
+                avg_heart_rate=stats_in.avg_heart_rate,
+                m2_heart_rate=stats_in.m2_heart_rate,
+                avg_pace=stats_in.avg_pace,
+                m2_pace=stats_in.m2_pace,
+                avg_duration=stats_in.avg_duration,
+                m2_duration=stats_in.m2_duration,
+                avg_elevation_gain=stats_in.avg_elevation_gain,
+                m2_elevation_gain=stats_in.m2_elevation_gain,
+                avg_elevation_loss=stats_in.avg_elevation_loss,
+                m2_elevation_loss=stats_in.m2_elevation_loss,
+                total_count=stats_in.total_count or 0,
+            )
+            db.add(db_obj)
+
+        db.commit()
+        db.refresh(db_obj)
+        return db_obj
+
+    except Exception as err:
+        db.rollback()
+        core_logger.print_to_log(
+            f"Error in create_or_update_stats: {err}", "error", exc=err
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal Server Error",
+        ) from err
+
 
 def delete_stats(stats_id: int, db: Session):
     try:
@@ -123,6 +205,34 @@ def delete_stats(stats_id: int, db: Session):
         db.rollback()
         core_logger.print_to_log(
             f"Error in delete_stats: {err}", "error", exc=err
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal Server Error",
+        ) from err
+
+
+def user_stats_by_user_id_activity_type_category(
+    user_id: int,
+    activity_type_id: int,
+    category_id: int,
+    db: Session,
+):
+    try:
+        return (
+            db.query(models.UserActivityStats)
+            .filter(
+                models.UserActivityStats.user_id == user_id,
+                models.UserActivityStats.activity_type_id == activity_type_id,
+                models.UserActivityStats.category_id == category_id,
+            )
+            .first()
+        )
+    except Exception as err:
+        core_logger.print_to_log(
+            f"Error in user_stats_by_user_id_activity_type_category: {err}",
+            "error",
+            exc=err,
         )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

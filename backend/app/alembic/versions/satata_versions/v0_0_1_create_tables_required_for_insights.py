@@ -57,12 +57,17 @@ def upgrade() -> None:
     op.create_index(op.f('ix_user_category_rules_user_id'), 'user_category_rules', ['user_id'], unique=False)
     op.create_table('user_activity_stats',
     sa.Column('id', sa.Integer(), autoincrement=True, nullable=False, comment='User activity statistics ID'),
+    sa.Column('user_id', sa.Integer(), nullable=False, comment='User ID'),
     sa.Column('activity_type_id', sa.Integer(), nullable=False, comment='Activity type ID'),
-    sa.Column('user_category_id', sa.Integer(), nullable=False, comment='User category rule ID'),
+    sa.Column('category_id', sa.Integer(), nullable=False, comment='Activity category ID'),
     sa.Column('avg_distance', sa.Float(), nullable=True, comment='Average distance in meters'),
     sa.Column('m2_distance', sa.Float(), nullable=True, comment='Welford M2 value for distance variance'),
     sa.Column('avg_heart_rate', sa.Float(), nullable=True, comment='Average heart rate'),
     sa.Column('m2_heart_rate', sa.Float(), nullable=True, comment='Welford M2 value for heart rate variance'),
+    sa.Column('avg_pace', sa.Float(), nullable=True, comment='Average pace in seconds per kilometer'),
+    sa.Column('m2_pace', sa.Float(), nullable=True, comment='Welford M2 value for pace variance'),
+    sa.Column('avg_duration', sa.Float(), nullable=True, comment='Average moving time in seconds'),
+    sa.Column('m2_duration', sa.Float(), nullable=True, comment='Welford M2 value for duration variance'),
     sa.Column('avg_elevation_gain', sa.Float(), nullable=True, comment='Average elevation gain in meters'),
     sa.Column('m2_elevation_gain', sa.Float(), nullable=True, comment='Welford M2 value for elevation gain variance'),
     sa.Column('avg_elevation_loss', sa.Float(), nullable=True, comment='Average elevation loss in meters'),
@@ -70,11 +75,14 @@ def upgrade() -> None:
     sa.Column('total_count', sa.Integer(), nullable=False, comment='Total number of activities in this category'),
     sa.Column('updated_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False, comment='Last statistics update timestamp'),
     sa.ForeignKeyConstraint(['activity_type_id'], ['activity_types.id'], ),
-    sa.ForeignKeyConstraint(['user_category_id'], ['user_category_rules.id'], ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['category_id'], ['activity_categories.id'], ),
+    sa.UniqueConstraint('user_id', 'activity_type_id', 'category_id', name='uq_user_activity_stats_bucket'),
     sa.PrimaryKeyConstraint('id')
     )
+    op.create_index(op.f('ix_user_activity_stats_user_id'), 'user_activity_stats', ['user_id'], unique=False)
     op.create_index(op.f('ix_user_activity_stats_activity_type_id'), 'user_activity_stats', ['activity_type_id'], unique=False)
-    op.create_index(op.f('ix_user_activity_stats_user_category_id'), 'user_activity_stats', ['user_category_id'], unique=False)
+    op.create_index(op.f('ix_user_activity_stats_category_id'), 'user_activity_stats', ['category_id'], unique=False)
     op.create_table('activity_ai_insights',
     sa.Column('id', sa.Integer(), autoincrement=True, nullable=False, comment='AI insight record ID'),
     sa.Column('activity_id', sa.Integer(), nullable=False, comment='Activity ID this AI insight belongs to'),
@@ -88,11 +96,17 @@ def upgrade() -> None:
     op.create_table('activity_delta_records',
     sa.Column('id', sa.Integer(), autoincrement=True, nullable=False, comment='Activity delta record ID'),
     sa.Column('activity_id', sa.Integer(), nullable=False, comment='Activity ID this delta record belongs to'),
-    sa.Column('user_category_id', sa.Integer(), nullable=False, comment='User category rule ID used as baseline'),
+    sa.Column('user_id', sa.Integer(), nullable=False, comment='User ID'),
+    sa.Column('activity_type_id', sa.Integer(), nullable=False, comment='Activity type ID'),
+    sa.Column('category_id', sa.Integer(), nullable=False, comment='Activity category ID'),
     sa.Column('delta_distance', sa.Float(), nullable=True, comment='Delta distance in meters compared to baseline average'),
     sa.Column('delta_distance_pct', sa.Float(), nullable=True, comment='Delta distance percentage compared to baseline average'),
     sa.Column('delta_hr', sa.Float(), nullable=True, comment='Delta average heart rate compared to baseline'),
     sa.Column('delta_hr_pct', sa.Float(), nullable=True, comment='Delta heart rate percentage compared to baseline'),
+    sa.Column('delta_avg_pace', sa.Float(), nullable=True, comment='Delta average pace (sec/km) compared to baseline'),
+    sa.Column('delta_avg_pace_pct', sa.Float(), nullable=True, comment='Delta average pace percentage compared to baseline'),
+    sa.Column('delta_duration', sa.Float(), nullable=True, comment='Delta moving time in seconds compared to baseline'),
+    sa.Column('delta_duration_pct', sa.Float(), nullable=True, comment='Delta moving time percentage compared to baseline'),
     sa.Column('delta_elevation_gain', sa.Float(), nullable=True, comment='Delta elevation gain compared to baseline'),
     sa.Column('delta_elevation_gain_pct', sa.Float(), nullable=True, comment='Delta elevation gain percentage compared to baseline'),
     sa.Column('delta_elevation_loss', sa.Float(), nullable=True, comment='Delta elevation loss compared to baseline'),
@@ -100,23 +114,30 @@ def upgrade() -> None:
     sa.Column('created_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False, comment='Delta record creation timestamp'),
     sa.Column('updated_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False, comment='Delta record last update timestamp'),
     sa.ForeignKeyConstraint(['activity_id'], ['activities.id'], ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['user_category_id'], ['user_category_rules.id'], ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['activity_type_id'], ['activity_types.id']),
+    sa.ForeignKeyConstraint(['category_id'], ['activity_categories.id']),
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_activity_delta_records_activity_id'), 'activity_delta_records', ['activity_id'], unique=False)
-    op.create_index(op.f('ix_activity_delta_records_user_category_id'), 'activity_delta_records', ['user_category_id'], unique=False)
+    op.create_index(op.f('ix_activity_delta_records_user_id'), 'activity_delta_records', ['user_id'], unique=False)
+    op.create_index(op.f('ix_activity_delta_records_activity_type_id'), 'activity_delta_records', ['activity_type_id'], unique=False)
+    op.create_index(op.f('ix_activity_delta_records_category_id'), 'activity_delta_records', ['category_id'], unique=False)
     # ### end Alembic commands ###
 
 
 def downgrade() -> None:
     # ### commands auto generated by Alembic - please adjust! ###
-    op.drop_index(op.f('ix_activity_delta_records_user_category_id'), table_name='activity_delta_records')
+    op.drop_index(op.f('ix_activity_delta_records_category_id'), table_name='activity_delta_records')
+    op.drop_index(op.f('ix_activity_delta_records_activity_type_id'), table_name='activity_delta_records')
+    op.drop_index(op.f('ix_activity_delta_records_user_id'), table_name='activity_delta_records')
     op.drop_index(op.f('ix_activity_delta_records_activity_id'), table_name='activity_delta_records')
     op.drop_table('activity_delta_records')
     op.drop_index(op.f('ix_activity_ai_insights_activity_id'), table_name='activity_ai_insights')
     op.drop_table('activity_ai_insights')
-    op.drop_index(op.f('ix_user_activity_stats_user_category_id'), table_name='user_activity_stats')
+    op.drop_index(op.f('ix_user_activity_stats_category_id'), table_name='user_activity_stats')
     op.drop_index(op.f('ix_user_activity_stats_activity_type_id'), table_name='user_activity_stats')
+    op.drop_index(op.f('ix_user_activity_stats_user_id'), table_name='user_activity_stats')
     op.drop_table('user_activity_stats')
     op.drop_index(op.f('ix_user_category_rules_user_id'), table_name='user_category_rules')
     op.drop_index(op.f('ix_user_category_rules_category_id'), table_name='user_category_rules')

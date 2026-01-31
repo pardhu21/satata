@@ -125,7 +125,7 @@ router.include_router(
     activity_delta_records_router.router,
     prefix=core_config.ROOT_PATH + "/activities_delta_records",
     tags=["activity_delta_records"],
-    dependencies=[Depends(auth_security.validate_access_token)],
+    # dependencies=[Depends(auth_security.validate_access_token)],
 )
 router.include_router(
     auth_router.router,

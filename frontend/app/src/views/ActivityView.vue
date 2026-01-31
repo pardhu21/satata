@@ -44,6 +44,10 @@
       />
     </div>
 
+    <div>
+      <ActivityAiInsightsComponent v-if="activity" :activity="activity" />
+    </div>
+
     <!-- map zone -->
     <div class="mt-3 mb-3" v-if="isLoading">
       <LoadingComponent />
@@ -253,6 +257,7 @@ import { useServerSettingsStore } from '@/stores/serverSettingsStore'
 import { push } from 'notivue'
 // Importing the components
 import ActivitySummaryComponent from '@/components/Activities/ActivitySummaryComponent.vue'
+import ActivityAiInsightsComponent from '@/components/Activities/ActivityAiInsightsComponent.vue'
 import ActivityMapComponent from '@/components/Activities/ActivityMapComponent.vue'
 import ActivityMandAbovePillsComponent from '@/components/Activities/ActivityMandAbovePillsComponent.vue'
 import ActivityBellowMPillsComponent from '@/components/Activities/ActivityBellowMPillsComponent.vue'

@@ -62,3 +62,11 @@ async def delete_delta_record(
     db: Annotated[Session, Depends(core_database.get_db)],
 ):
     crud.delete_delta(record_id, db)
+
+@router.get("/test/db")
+async def test_db(
+    # _check_scopes: Annotated[Callable, Security(auth_security.check_scopes,
+    #                                           scopes=["activities:read"])],
+    db: Annotated[Session, Depends(core_database.get_db)],
+):
+    return crud.test(db)

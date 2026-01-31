@@ -15,17 +15,51 @@ def update_running_stat(
         # first data point
         return value, 0.0
 
-    delta = value - mean
+    delta = float(value) - float(mean)
     mean_new = mean + delta / (count + 1)
-    delta2 = value - mean_new
+    delta2 = float(value) - float(mean_new)
     m2_new = m2 + delta * delta2
 
     return mean_new, m2_new
 
+
+
 def update_user_category_stats(
-    stats: UserActivityStats,
+    category_id: int,
+    stats: UserActivityStats | None,
     activity: Activity,
 ) -> UserActivityStats:
+
+    now = datetime.now(timezone.utc).isoformat()
+
+    # First activity → initialize stats
+    if stats is None:
+        return UserActivityStats(
+            user_id=activity.user_id,
+            activity_type_id=activity.activity_type,
+            category_id=category_id,
+
+            avg_distance=activity.distance,
+            m2_distance=0.0,
+
+            avg_heart_rate=activity.average_hr,
+            m2_heart_rate=0.0,
+
+            avg_pace=activity.pace,
+            m2_pace=0.0,
+
+            avg_duration=activity.total_elapsed_time,
+            m2_duration=0.0,
+
+            avg_elevation_gain=activity.elevation_gain,
+            m2_elevation_gain=0.0,
+
+            avg_elevation_loss=activity.elevation_loss,
+            m2_elevation_loss=0.0,
+
+            total_count=1,
+            updated_at=now,
+        )
 
     count = stats.total_count or 0
     new_count = count + 1
@@ -41,6 +75,20 @@ def update_user_category_stats(
         activity.average_hr,
         stats.avg_heart_rate,
         stats.m2_heart_rate,
+        count,
+    )
+
+    avg_pace, m2_pace = update_running_stat(
+        activity.pace,
+        stats.avg_pace,
+        stats.m2_pace,
+        count,
+    )
+
+    avg_duration, m2_duration = update_running_stat(
+        activity.total_elapsed_time,
+        stats.avg_duration,
+        stats.m2_duration,
         count,
     )
 
@@ -64,6 +112,12 @@ def update_user_category_stats(
     stats.avg_heart_rate = avg_hr
     stats.m2_heart_rate = m2_hr
 
+    stats.avg_pace = avg_pace
+    stats.m2_pace = m2_pace
+
+    stats.avg_duration = avg_duration
+    stats.m2_duration = m2_duration
+
     stats.avg_elevation_gain = avg_elev_gain
     stats.m2_elevation_gain = m2_elev_gain
 
@@ -71,6 +125,6 @@ def update_user_category_stats(
     stats.m2_elevation_loss = m2_elev_loss
 
     stats.total_count = new_count
-    stats.updated_at = datetime.now(timezone.utc).isoformat()
+    stats.updated_at = now
 
     return stats
