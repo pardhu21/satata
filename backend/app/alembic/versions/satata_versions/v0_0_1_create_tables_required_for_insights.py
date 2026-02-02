@@ -33,6 +33,7 @@ def upgrade() -> None:
     sa.Column('display_name', sa.String(length=250), nullable=False, comment='User-facing activity type name (e.g. Run, Ride, Swim)'),
     sa.PrimaryKeyConstraint('id')
     )
+    sa.Column('ai_insight_parameters', postgresql.ARRAY(sa.String()), nullable=True, comment='List of parameter that considered for ai insights generation')
     op.create_index(op.f('ix_activity_types_name'), 'activity_types', ['name'], unique=True)
     op.create_table('user_category_rules',
     sa.Column('id', sa.Integer(), autoincrement=True, nullable=False, comment='User category rule ID'),

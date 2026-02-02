@@ -99,7 +99,7 @@ def get_activity_ai_insights(activity: Activity, db: Session):
 
     insight_text = generate_ai_insight(
         record=delta_record,
-        api_key=API_KEY,
+        # api_key=API_KEY,
     )
 
     ai_insights_crud.create_insight(

@@ -3,8 +3,9 @@ from sqlalchemy import (
     Integer,
     String,
 )
-from sqlalchemy.orm import relationship
+from sqlalchemy.dialects.postgresql import ARRAY
 from core.database import Base
+from typing import List
 
 
 class ActivityTypes(Base):
@@ -29,4 +30,10 @@ class ActivityTypes(Base):
         String(length=250),
         nullable=False,
         comment="User-facing activity type name (e.g. Run, Ride, Swim)",
+    )
+
+    ai_insight_parameters= Column(
+        ARRAY(String),
+        nullable=True,
+        comment="List of parameter that considered for ai insights generation",
     )

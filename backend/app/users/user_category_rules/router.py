@@ -1,6 +1,6 @@
 from typing import Annotated, Callable
 
-from fastapi import APIRouter, Depends, Security, status
+from fastapi import APIRouter, Depends, HTTPException, Security, status
 from sqlalchemy.orm import Session
 
 import users.user_category_rules.crud as crud
