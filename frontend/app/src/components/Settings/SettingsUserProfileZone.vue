@@ -721,10 +721,6 @@
         </div>
       </div>
 
-      <div>
-        <SettingsUserProfileRulesComponent />
-      </div>
-
       <!-- Import / Export Buttons -->
       <hr />
       <div>
@@ -789,7 +785,6 @@ import ModalComponent from '@/components/Modals/ModalComponent.vue'
 import LoadingComponent from '../GeneralComponents/LoadingComponent.vue'
 import ModalComponentSelectInput from '@/components/Modals/ModalComponentSelectInput.vue'
 import ModalComponentUploadFile from '@/components/Modals/ModalComponentUploadFile.vue'
-import SettingsUserProfileRulesComponent from './SettingsUserProfileRulesComponent.vue'
 
 const authStore = useAuthStore()
 const { t, locale } = useI18n()

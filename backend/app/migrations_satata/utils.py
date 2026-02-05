@@ -24,8 +24,10 @@ async def check_migrations_not_executed(db: Session):
             
             if migration.id == 2:
                 # Execute the migration
-                migrations_migration_2.process_migration_2(db)
+                # migrations_migration_2.process_migration_2(db)
+                pass
 
             if migration.id == 3:
                 # Execute the migration
-                migrations_migration_3.process_migration_3(db)
+                # migrations_migration_3.process_migration_3(db)
+                pass

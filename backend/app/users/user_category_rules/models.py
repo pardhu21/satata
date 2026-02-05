@@ -5,6 +5,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from core.database import Base
 from sqlalchemy.sql import func
 
@@ -43,40 +44,10 @@ class UserCategoryRules(Base):
         comment="Activity category ID",
     )
 
-    min_distance = Column(
-        Float,
-        nullable=True,
-        comment="Minimum distance in meters",
-    )
-
-    max_distance = Column(
-        Float,
-        nullable=True,
-        comment="Maximum distance in meters",
-    )
-
-    min_hr = Column(
-        Float,
-        nullable=True,
-        comment="Minimum average heart rate",
-    )
-
-    max_hr = Column(
-        Float,
-        nullable=True,
-        comment="Maximum average heart rate",
-    )
-
-    min_elevation_gain = Column(
-        Float,
-        nullable=True,
-        comment="Minimum elevation gain in meters",
-    )
-
-    max_elevation_gain = Column(
-        Float,
-        nullable=True,
-        comment="Maximum elevation gain in meters",
+    values = Column(
+        JSONB,
+        nullable=False,
+        comment="JSON object defining the rule values",
     )
 
     created_at = Column(

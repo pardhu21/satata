@@ -3,6 +3,9 @@ from sqlalchemy.orm import Session
 import activities.activity.utils as activity_utils
 import activities.activity_types.models as activity_types_models
 import activities.activity_types.crud as activity_types_crud
+import activities.activity_types.utils as activity_types_utils
+import activities.activity_categories.utils as activity_category_utils
+import activities.activity_categories.models as activity_categories_models
 import migrations_satata.crud as migrations_crud
 
 import core.logger as core_logger
@@ -10,70 +13,253 @@ import core.logger as core_logger
 
 def process_migration_1(db: Session):
     """
-    Insert canonical activity types from activity utils.
+    Seed activity_types, activity_categories, and per-user user_category_rules using
+    canonical utils so that separate migrations 2 and 3 are not required.
 
-    Args:
-        db: Database session.
-
-    Returns:
-        None.
-
-    Raises:
-        None. Errors are logged and the migration is not marked
-        executed if failures occur.
+    Idempotent: skips inserting rows that already exist by natural keys.
     """
-    core_logger.print_to_log_and_console("Started migration s1")
+    core_logger.print_to_log_and_console(
+        "Started migration s1 - seed types, categories and user rules"
+    )
 
     processed_ok = True
 
     try:
-        # Iterate the mapping of id -> display name from utils
-        for type_id, type_name in activity_utils.ACTIVITY_ID_TO_NAME.items():
+        # -----------------------------
+        # Seed activity categories (was migration_2)
+        # -----------------------------
+        for cat_id, (cat_name, cat_display) in (
+            activity_category_utils.CANONICAL_ACTIVITY_CATEGORIES.items()
+        ):
             try:
                 # Skip if an entry with this id already exists
-                existing_by_id = activity_types_crud.get_type_by_id(type_id, db)
-                if existing_by_id:
+                existing = (
+                    db.query(activity_categories_models.ActivityCategories)
+                    .filter(
+                        activity_categories_models.ActivityCategories.id == cat_id
+                    )
+                    .first()
+                )
+                if existing:
                     core_logger.print_to_log_and_console(
-                        f"Migration s1 - Activity type {type_id} already "
-                        f"exists. Skipping.")
+                        f"Migration s1 - Category id {cat_id} already exists. Skipping."
+                    )
                     continue
 
                 # Skip if an entry with the same name exists
                 existing_by_name = (
-                    db.query(activity_types_models.ActivityTypes)
+                    db.query(activity_categories_models.ActivityCategories)
                     .filter(
-                        activity_types_models.ActivityTypes.name == type_name
+                        activity_categories_models.ActivityCategories.name
+                        == cat_name
                     )
                     .first()
                 )
                 if existing_by_name:
                     core_logger.print_to_log_and_console(
-                        f"Migration s1 - Activity type name '{type_name}' "
-                        f"already exists. Skipping.")
+                        f"Migration s1 - Category name '{cat_name}' already exists. Skipping."
+                    )
                     continue
 
-                # Create new activity type with explicit id, name and display
+                new_cat = activity_categories_models.ActivityCategories(
+                    id=cat_id,
+                    name=cat_name,
+                    display_name=cat_display,
+                )
+
+                print(new_cat)
+                break
+
+
+
+                print(f"----------------------------------->Migration s1 - Adding category {cat_id}: {cat_name}")
+                db.add(new_cat)
+            except Exception as inner_err:
+                processed_ok = False
+                core_logger.print_to_log_and_console(
+                    f"Migration s1 - Failed to insert category {cat_id}: {inner_err}",
+                    "error",
+                    exc=inner_err,
+                )
+
+        # -----------------------------
+        # Seed activity types (enhanced)
+        # -----------------------------
+        for type_id, display_name in sorted(
+            activity_utils.ACTIVITY_ID_TO_NAME.items(), key=lambda kv: kv[0]
+        ):
+            try:
+                # Skip if an entry with this id already exists
+                existing_by_id = activity_types_crud.get_type_by_id(type_id, db)
+                if existing_by_id:
+                    core_logger.print_to_log_and_console(
+                        f"Migration s1 - Activity type {type_id} already exists. Skipping."
+                    )
+                    continue
+
+                internal_name = activity_types_utils.normal_to_snake_case(
+                    display_name
+                )
+
+                # Skip if an entry with the same internal name exists
+                existing_by_name = (
+                    db.query(activity_types_models.ActivityTypes)
+                    .filter(
+                        activity_types_models.ActivityTypes.name == internal_name
+                    )
+                    .first()
+                )
+                if existing_by_name:
+                    core_logger.print_to_log_and_console(
+                        f"Migration s1 - Activity type name '{internal_name}' already exists. Skipping."
+                    )
+                    continue
+
+                params = activity_types_utils.get_parameters_for_activity(
+                    display_name
+                )
+
                 new_type = activity_types_models.ActivityTypes(
                     id=type_id,
-                    name=type_name,
-                    display_name=normal_to_snake_case(type_name),
+                    name=internal_name,
+                    display_name=display_name,
+                    ai_insight_parameters=params if params is not None else None,
                 )
                 db.add(new_type)
             except Exception as inner_err:
                 processed_ok = False
                 core_logger.print_to_log_and_console(
-                    f"Migration s1 - Failed to insert type {type_id}: "
-                    f"{inner_err}",
+                    f"Migration s1 - Failed to insert activity type {type_id}: {inner_err}",
                     "error",
                     exc=inner_err,
                 )
+
+        # -----------------------------
+        # Seed per-user rules from defaults (was migration_3, now generalized)
+        # -----------------------------
+        try:
+            from users.users import models as users_models
+            from users.user_category_rules import models as user_category_rules_models
+        except Exception as import_err:
+            processed_ok = False
+            core_logger.print_to_log_and_console(
+                f"Migration s1 - Failed to import user models: {import_err}",
+                "error",
+                exc=import_err,
+            )
+        else:
+            try:
+                users = db.query(users_models.Users).all()
+            except Exception as e:
+                processed_ok = False
+                core_logger.print_to_log_and_console(
+                    f"Migration s1 - Failed to fetch users: {e}",
+                    "error",
+                    exc=e,
+                )
+                users = []
+
+            if not users:
+                core_logger.print_to_log_and_console(
+                    "Migration s1 - No users found. Skipping user_category_rules seeding."
+                )
+            else:
+                # Build default values per activity and category from utils
+                defaults_by_activity = (
+                    activity_types_utils.build_activity_category_default_values()
+                )
+                # Preload categories map
+                categories_by_id = dict(
+                    activity_category_utils.CANONICAL_ACTIVITY_CATEGORIES
+                )
+
+                for user in users:
+                    user_id = user.id
+                    for type_id, display_name in sorted(
+                        activity_utils.ACTIVITY_ID_TO_NAME.items(),
+                        key=lambda kv: kv[0],
+                    ):
+                        internal_name = activity_types_utils.normal_to_snake_case(
+                            display_name
+                        )
+                        per_category_defaults = defaults_by_activity.get(
+                            internal_name, {}
+                        )
+
+                        for cat_id, (cat_name, _cat_disp) in categories_by_id.items():
+                            pd = per_category_defaults.get(cat_name, {})
+                            dist_val = pd.get("distance")
+                            hr_val = pd.get("hr")
+                            elev_val = pd.get("elevation_gain")
+
+                            # Skip if no supported params present for this activity-category
+                            if (
+                                dist_val is None
+                                and hr_val is None
+                                and elev_val is None
+                            ):
+                                continue
+
+                            try:
+                                # Check for existing rule to avoid duplicates
+                                existing = (
+                                    db.query(
+                                        user_category_rules_models.UserCategoryRules
+                                    )
+                                    .filter(
+                                        user_category_rules_models.UserCategoryRules.user_id
+                                        == user_id,
+                                        user_category_rules_models.UserCategoryRules.activity_type_id
+                                        == type_id,
+                                        user_category_rules_models.UserCategoryRules.category_id
+                                        == cat_id,
+                                    )
+                                    .first()
+                                )
+                                if existing:
+                                    core_logger.print_to_log_and_console(
+                                        f"Migration s1 - Rule already exists for user {user_id}, activity {type_id}, category {cat_id}. Skipping."
+                                    )
+                                    continue
+
+                                # Map single defaults to min/max columns
+                                new_rule = (
+                                    user_category_rules_models.UserCategoryRules(
+                                        user_id=user_id,
+                                        activity_type_id=type_id,
+                                        category_id=cat_id,
+                                        min_distance=dist_val
+                                        if dist_val is not None
+                                        else None,
+                                        max_distance=dist_val
+                                        if dist_val is not None
+                                        else None,
+                                        min_hr=hr_val if hr_val is not None else None,
+                                        max_hr=hr_val if hr_val is not None else None,
+                                        min_elevation_gain=elev_val
+                                        if elev_val is not None
+                                        else None,
+                                        max_elevation_gain=elev_val
+                                        if elev_val is not None
+                                        else None,
+                                    )
+                                )
+                                db.add(new_rule)
+                            except Exception as inner_err:
+                                processed_ok = False
+                                core_logger.print_to_log_and_console(
+                                    f"Migration s1 - Failed to insert rule for user {user_id}, activity {type_id}, category {cat_id}: {inner_err}",
+                                    "error",
+                                    exc=inner_err,
+                                )
+
         # Commit all inserts at once
         db.commit()
     except Exception as err:
         db.rollback()
         processed_ok = False
         core_logger.print_to_log_and_console(
-            f"Migration s1 - Error processing activity types: {err}",
+            f"Migration s1 - Error during seeding process: {err}",
             "error",
             exc=err,
         )
@@ -91,8 +277,7 @@ def process_migration_1(db: Session):
             return
     else:
         core_logger.print_to_log_and_console(
-            "Migration s1 failed to process all activity types. "
-            "Will try again later.",
+            "Migration s1 completed with errors. Will try again later.",
             "error",
         )
 

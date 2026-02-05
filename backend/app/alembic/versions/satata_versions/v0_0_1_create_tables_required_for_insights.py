@@ -7,6 +7,8 @@ Create Date: 2026-01-28 14:18:43.321585
 """
 from typing import Sequence, Union
 
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
+
 from alembic import op
 import sqlalchemy as sa
 
@@ -33,19 +35,14 @@ def upgrade() -> None:
     sa.Column('display_name', sa.String(length=250), nullable=False, comment='User-facing activity type name (e.g. Run, Ride, Swim)'),
     sa.PrimaryKeyConstraint('id')
     )
-    sa.Column('ai_insight_parameters', postgresql.ARRAY(sa.String()), nullable=True, comment='List of parameter that considered for ai insights generation')
+    sa.Column('ai_insight_parameters', ARRAY(sa.String()), nullable=True, comment='List of parameter that considered for ai insights generation')
     op.create_index(op.f('ix_activity_types_name'), 'activity_types', ['name'], unique=True)
     op.create_table('user_category_rules',
     sa.Column('id', sa.Integer(), autoincrement=True, nullable=False, comment='User category rule ID'),
     sa.Column('user_id', sa.Integer(), nullable=False, comment='User ID this rule belongs to'),
     sa.Column('activity_type_id', sa.Integer(), nullable=False, comment='Activity type ID'),
     sa.Column('category_id', sa.Integer(), nullable=False, comment='Activity category ID'),
-    sa.Column('min_distance', sa.Float(), nullable=True, comment='Minimum distance in meters'),
-    sa.Column('max_distance', sa.Float(), nullable=True, comment='Maximum distance in meters'),
-    sa.Column('min_hr', sa.Float(), nullable=True, comment='Minimum average heart rate'),
-    sa.Column('max_hr', sa.Float(), nullable=True, comment='Maximum average heart rate'),
-    sa.Column('min_elevation_gain', sa.Float(), nullable=True, comment='Minimum elevation gain in meters'),
-    sa.Column('max_elevation_gain', sa.Float(), nullable=True, comment='Maximum elevation gain in meters'),
+    sa.Column('values', JSONB(), nullable=False, comment='JSON object defining the rule values'),
     sa.Column('created_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False, comment='Rule creation timestamp'),
     sa.Column('updated_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False, comment='Rule last update timestamp'),
     sa.ForeignKeyConstraint(['activity_type_id'], ['activity_types.id'], ),
