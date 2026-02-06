@@ -67,12 +67,6 @@ def process_migration_1(db: Session):
                     display_name=cat_display,
                 )
 
-                print(new_cat)
-                break
-
-
-
-                print(f"----------------------------------->Migration s1 - Adding category {cat_id}: {cat_name}")
                 db.add(new_cat)
             except Exception as inner_err:
                 processed_ok = False
@@ -228,20 +222,7 @@ def process_migration_1(db: Session):
                                         user_id=user_id,
                                         activity_type_id=type_id,
                                         category_id=cat_id,
-                                        min_distance=dist_val
-                                        if dist_val is not None
-                                        else None,
-                                        max_distance=dist_val
-                                        if dist_val is not None
-                                        else None,
-                                        min_hr=hr_val if hr_val is not None else None,
-                                        max_hr=hr_val if hr_val is not None else None,
-                                        min_elevation_gain=elev_val
-                                        if elev_val is not None
-                                        else None,
-                                        max_elevation_gain=elev_val
-                                        if elev_val is not None
-                                        else None,
+                                        values=pd
                                     )
                                 )
                                 db.add(new_rule)

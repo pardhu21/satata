@@ -12,16 +12,11 @@ def midpoint(min_val, max_val):
     return (min_val + max_val) / 2
 
 
-def norm_delta(value, min_val, max_val):
-    if value is None or min_val is None or max_val is None:
+def norm_delta(value, mid_val):
+    if value is None or mid_val is None or mid_val == 0:
         return 0.0
+    return abs(value - mid_val) / mid_val
 
-    span = max_val - min_val
-    if span == 0:
-        return 0.0
-
-    mid = midpoint(min_val, max_val)
-    return abs(value - mid) / span
 
 def classify_activity_by_rule_vectors(
     activity: Activity,
@@ -38,37 +33,21 @@ def classify_activity_by_rule_vectors(
         if rule.activity_type_id != activity.activity_type:
             continue
 
-        # Normalized deltas
-        d_dist = norm_delta(
-            activity.distance,
-            rule.min_distance,
-            rule.max_distance,
-        )
+        # Normalized deltas using midpoints (assuming these midpoints are directly provided now)
+        values = rule.values
+        d_dist = norm_delta(activity.distance, values.get('distance'))
+        d_hr = norm_delta(activity.average_hr, values.get('hr'))
+        d_elev = norm_delta(activity.elevation_gain, values.get('elevation_gain'))
 
-        d_hr = norm_delta(
-            activity.average_hr,
-            rule.min_hr,
-            rule.max_hr,
-        )
-
-        d_elev = norm_delta(
-            activity.elevation_gain,
-            rule.min_elevation_gain,
-            rule.max_elevation_gain,
-        )
-
-        # Vector distance
-        distance = math.sqrt(
-            d_dist ** 2 +
-            d_hr ** 2 +
-            d_elev ** 2
-        )
+        # Vector distance (Euclidean distance between points)
+        distance = math.sqrt(d_dist ** 2 + d_hr ** 2 + d_elev ** 2)
 
         if distance < best_distance:
             best_distance = distance
             best_category_id = rule.category_id
 
     return best_category_id
+
 
 def compute_delta(value, avg):
     if value is None or avg is None:
@@ -84,7 +63,7 @@ def compute_delta_pct(delta: float | None, baseline: float | None):
 
 def compute_activity_delta(
     category_id: int,
-    stats: UserActivityStats | None,
+    stats: Optional[UserActivityStats],
     activity: Activity,
 ) -> ActivityDeltaRecord:
 
@@ -127,19 +106,11 @@ def compute_activity_delta(
     delta_duration = compute_delta(activity.total_elapsed_time, stats.avg_duration)
     delta_duration_pct = compute_delta_pct(delta_duration, stats.avg_duration)
 
-    delta_elev_gain = compute_delta(
-        activity.elevation_gain, stats.avg_elevation_gain
-    )
-    delta_elev_gain_pct = compute_delta_pct(
-        delta_elev_gain, stats.avg_elevation_gain
-    )
+    delta_elev_gain = compute_delta(activity.elevation_gain, stats.avg_elevation_gain)
+    delta_elev_gain_pct = compute_delta_pct(delta_elev_gain, stats.avg_elevation_gain)
 
-    delta_elev_loss = compute_delta(
-        activity.elevation_loss, stats.avg_elevation_loss
-    )
-    delta_elev_loss_pct = compute_delta_pct(
-        delta_elev_loss, stats.avg_elevation_loss
-    )
+    delta_elev_loss = compute_delta(activity.elevation_loss, stats.avg_elevation_loss)
+    delta_elev_loss_pct = compute_delta_pct(delta_elev_loss, stats.avg_elevation_loss)
 
     return ActivityDeltaRecord(
         user_id=activity.user_id,

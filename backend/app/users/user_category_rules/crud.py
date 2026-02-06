@@ -46,12 +46,7 @@ def create_rule(rule_in: schema.UserCategoryRuleCreate, db: Session):
             user_id=rule_in.user_id,
             activity_type_id=rule_in.activity_type_id,
             category_id=rule_in.category_id,
-            min_distance=rule_in.min_distance,
-            max_distance=rule_in.max_distance,
-            min_hr=rule_in.min_hr,
-            max_hr=rule_in.max_hr,
-            min_elevation_gain=rule_in.min_elevation_gain,
-            max_elevation_gain=rule_in.max_elevation_gain,
+            values=rule_in.values
         )
         db.add(db_obj)
         db.commit()
@@ -81,12 +76,7 @@ def edit_rule(rule_id: int, rule_edit: schema.UserCategoryRuleEdit, token_user_i
                 detail="You do not have permission to edit this rule",
             )
         for field in [
-            "min_distance",
-            "max_distance",
-            "min_hr",
-            "max_hr",
-            "min_elevation_gain",
-            "max_elevation_gain",
+            "values"
         ]:
             val = getattr(rule_edit, field)
             if val is not None:
