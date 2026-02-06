@@ -59,6 +59,7 @@ SUPPORTED_FILE_FORMATS = [
     ".tcx",
     ".gz",
 ]  # used to screen bulk import files
+OPENAI_API_KEY=os.getenv("OPENAI_API_KEY")
 
 
 def read_secret(env_var_name: str, default_value: str | None = None) -> str | None:

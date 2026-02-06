@@ -2,6 +2,8 @@ import os
 import requests
 import json
 
+import core.config as core_config
+
 import activities.activity_delta_records.models as models
 import activities.activity_delta_records.schema as schema
 
@@ -431,7 +433,7 @@ def test(db: Session):
         }
 
         headers = {
-            "Authorization": f"Bearer {API_KEY}",
+            "Authorization": f"Bearer {core_config.OPENAI_API_KEY}",
             "Content-Type": "application/json"
         }
 
