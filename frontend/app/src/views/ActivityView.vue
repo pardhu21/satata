@@ -44,7 +44,7 @@
       />
     </div>
 
-    <div>
+    <div class="mt-3 mb-3" v-if="!isLoading">
       <ActivityAiInsightsComponent v-if="activity" :activity="activity" />
     </div>
 
