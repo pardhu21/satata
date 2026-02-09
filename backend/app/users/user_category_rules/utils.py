@@ -6,6 +6,13 @@ USER_CATEGORY_RULES: dict[int, dict] where key is category_id and
 value is a dict with the fields required to insert into user_category_rules.
 """
 from typing import Dict
+from users.user_category_rules.models import UserCategoryRules
+from users.users import models as users_models
+
+from activities.activity import utils as activity_utils
+from activities.activity_types import utils as activity_types_utils
+from activities.activity_categories import utils as activity_category_utils
+
 
 # Default values to be used when creating user category rules for a user.
 USER_CATEGORY_RULES: Dict[int, dict] = {
@@ -110,3 +117,128 @@ USER_CATEGORY_RULES: Dict[int, dict] = {
         "max_elevation_gain": 1000,
     },
 }
+
+def seed_user_category_rules_for_user(
+    db,
+    core_logger,
+    user_id: int,
+    defaults_by_activity: dict = None,
+    categories_by_id: dict = None,
+) -> bool:
+    """
+    Seed default user category rules for a single user.
+    """
+    processed_ok = True
+
+    if defaults_by_activity is None:
+        defaults_by_activity = (
+            activity_types_utils.build_activity_category_default_values()
+        )
+    if categories_by_id is None:
+        categories_by_id = dict(
+            activity_category_utils.CANONICAL_ACTIVITY_CATEGORIES
+        )
+
+    for type_id, display_name in sorted(
+        activity_utils.ACTIVITY_ID_TO_NAME.items(),
+        key=lambda kv: kv[0],
+    ):
+        internal_name = activity_types_utils.normal_to_snake_case(
+            display_name
+        )
+        per_category_defaults = defaults_by_activity.get(
+            internal_name, {}
+        )
+
+        for cat_id, (cat_name, _cat_disp) in categories_by_id.items():
+            pd = per_category_defaults.get(cat_name, {})
+            dist_val = pd.get("distance")
+            hr_val = pd.get("hr")
+            elev_val = pd.get("elevation_gain")
+
+            # Skip unsupported activity-category combos
+            if (
+                dist_val is None
+                and hr_val is None
+                and elev_val is None
+            ):
+                continue
+
+            try:
+                existing = (
+                    db.query(UserCategoryRules)
+                    .filter(
+                        UserCategoryRules.user_id == user_id,
+                        UserCategoryRules.activity_type_id == type_id,
+                        UserCategoryRules.category_id == cat_id,
+                    )
+                    .first()
+                )
+                if existing:
+                    core_logger.print_to_log_and_console(
+                        f"Migration s1 - Rule already exists for user {user_id}, "
+                        f"activity {type_id}, category {cat_id}. Skipping."
+                    )
+                    continue
+
+                new_rule = UserCategoryRules(
+                    user_id=user_id,
+                    activity_type_id=type_id,
+                    category_id=cat_id,
+                    values=pd,
+                )
+                db.add(new_rule)
+
+            except Exception as err:
+                processed_ok = False
+                core_logger.print_to_log_and_console(
+                    f"Migration s1 - Failed to insert rule for user {user_id}, "
+                    f"activity {type_id}, category {cat_id}: {err}",
+                    "error",
+                    exc=err,
+                )
+
+    return processed_ok
+
+
+def seed_user_category_rules(db, core_logger) -> bool:
+    """
+    Seed default user category rules for all users.
+    """
+    try:
+        users = db.query(users_models.Users).all()
+    except Exception as e:
+        core_logger.print_to_log_and_console(
+            f"Migration s1 - Failed to fetch users: {e}",
+            "error",
+            exc=e,
+        )
+        return False
+
+    if not users:
+        core_logger.print_to_log_and_console(
+            "Migration s1 - No users found. Skipping user_category_rules seeding."
+        )
+        return True
+
+    defaults_by_activity = (
+        activity_types_utils.build_activity_category_default_values()
+    )
+    categories_by_id = dict(
+        activity_category_utils.CANONICAL_ACTIVITY_CATEGORIES
+    )
+
+    processed_ok = True
+
+    for user in users:
+        ok = seed_user_category_rules_for_user(
+            db=db,
+            core_logger=core_logger,
+            user_id=user.id,
+            defaults_by_activity=defaults_by_activity,
+            categories_by_id=categories_by_id,
+        )
+        if not ok:
+            processed_ok = False
+
+    return processed_ok

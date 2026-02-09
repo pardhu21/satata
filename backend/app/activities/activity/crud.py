@@ -6,6 +6,8 @@ import activities.activity.schema as activities_schema
 import activities.activity.utils as activities_utils
 import activities.activity_ai_insights.utils as activity_ai_insights_utils
 
+import users.user_activity_stats.crud as user_stats_crud
+
 import followers.models as followers_models
 
 import core.logger as core_logger
@@ -1382,19 +1384,18 @@ def edit_multiple_activities_gear_id(
 
 def delete_activity(activity_id: int, db: Session):
     try:
-        # Delete the activity
-        num_deleted = (
-            db.query(activities_models.Activity)
-            .filter(activities_models.Activity.id == activity_id)
-            .delete()
-        )
+        activity = get_activity_by_id(activity_id, db)
 
-        # Check if the activity was found and deleted
-        if num_deleted == 0:
+        if activity is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Activity with id {activity_id} not found",
             )
+        # Update the averages before deleting the activity
+        user_stats_crud.update_stats_on_activity_delete(activity, db)
+
+        # Delete the activity
+        db.query(activities_models.Activity).filter(activities_models.Activity.id == activity_id).delete()
 
         # Commit the transaction
         db.commit()
@@ -1417,17 +1418,20 @@ def delete_activity(activity_id: int, db: Session):
 def delete_all_strava_activities_for_user(user_id: int, db: Session):
     try:
         # Delete the strava activities for the user
-        num_deleted = (
+        activities = (
             db.query(activities_models.Activity)
             .filter(
                 activities_models.Activity.user_id == user_id,
                 activities_models.Activity.strava_activity_id.isnot(None),
             )
-            .delete()
+            .all()
         )
+        
+        for activity in activities:
+            # Update the averages before deleting the activity
+            user_stats_crud.update_stats_on_activity_delete(activity, db)
 
-        # Check if activities were found and deleted and commit the transaction
-        if num_deleted != 0:
+        if len(activities) != 0:
             # Commit the transaction
             db.commit()
     except Exception as err:

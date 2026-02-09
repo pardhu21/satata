@@ -7,6 +7,7 @@ import activities.activity_types.utils as activity_types_utils
 import activities.activity_categories.utils as activity_category_utils
 import activities.activity_categories.models as activity_categories_models
 import migrations_satata.crud as migrations_crud
+import users.user_category_rules.utils as user_category_rules_utils
 
 import core.logger as core_logger
 
@@ -132,108 +133,14 @@ def process_migration_1(db: Session):
         # Seed per-user rules from defaults (was migration_3, now generalized)
         # -----------------------------
         try:
-            from users.users import models as users_models
-            from users.user_category_rules import models as user_category_rules_models
-        except Exception as import_err:
+            user_category_rules_utils.seed_user_category_rules(db, core_logger=core_logger)
+        except Exception as e:
             processed_ok = False
             core_logger.print_to_log_and_console(
-                f"Migration s1 - Failed to import user models: {import_err}",
+                f"Migration s1 - Failed to fetch users: {e}",
                 "error",
-                exc=import_err,
+                exc=e,
             )
-        else:
-            try:
-                users = db.query(users_models.Users).all()
-            except Exception as e:
-                processed_ok = False
-                core_logger.print_to_log_and_console(
-                    f"Migration s1 - Failed to fetch users: {e}",
-                    "error",
-                    exc=e,
-                )
-                users = []
-
-            if not users:
-                core_logger.print_to_log_and_console(
-                    "Migration s1 - No users found. Skipping user_category_rules seeding."
-                )
-            else:
-                # Build default values per activity and category from utils
-                defaults_by_activity = (
-                    activity_types_utils.build_activity_category_default_values()
-                )
-                # Preload categories map
-                categories_by_id = dict(
-                    activity_category_utils.CANONICAL_ACTIVITY_CATEGORIES
-                )
-
-                for user in users:
-                    user_id = user.id
-                    for type_id, display_name in sorted(
-                        activity_utils.ACTIVITY_ID_TO_NAME.items(),
-                        key=lambda kv: kv[0],
-                    ):
-                        internal_name = activity_types_utils.normal_to_snake_case(
-                            display_name
-                        )
-                        per_category_defaults = defaults_by_activity.get(
-                            internal_name, {}
-                        )
-
-                        for cat_id, (cat_name, _cat_disp) in categories_by_id.items():
-                            pd = per_category_defaults.get(cat_name, {})
-                            dist_val = pd.get("distance")
-                            hr_val = pd.get("hr")
-                            elev_val = pd.get("elevation_gain")
-
-                            # Skip if no supported params present for this activity-category
-                            if (
-                                dist_val is None
-                                and hr_val is None
-                                and elev_val is None
-                            ):
-                                continue
-
-                            try:
-                                # Check for existing rule to avoid duplicates
-                                existing = (
-                                    db.query(
-                                        user_category_rules_models.UserCategoryRules
-                                    )
-                                    .filter(
-                                        user_category_rules_models.UserCategoryRules.user_id
-                                        == user_id,
-                                        user_category_rules_models.UserCategoryRules.activity_type_id
-                                        == type_id,
-                                        user_category_rules_models.UserCategoryRules.category_id
-                                        == cat_id,
-                                    )
-                                    .first()
-                                )
-                                if existing:
-                                    core_logger.print_to_log_and_console(
-                                        f"Migration s1 - Rule already exists for user {user_id}, activity {type_id}, category {cat_id}. Skipping."
-                                    )
-                                    continue
-
-                                # Map single defaults to min/max columns
-                                new_rule = (
-                                    user_category_rules_models.UserCategoryRules(
-                                        user_id=user_id,
-                                        activity_type_id=type_id,
-                                        category_id=cat_id,
-                                        values=pd
-                                    )
-                                )
-                                db.add(new_rule)
-                            except Exception as inner_err:
-                                processed_ok = False
-                                core_logger.print_to_log_and_console(
-                                    f"Migration s1 - Failed to insert rule for user {user_id}, activity {type_id}, category {cat_id}: {inner_err}",
-                                    "error",
-                                    exc=inner_err,
-                                )
-
         # Commit all inserts at once
         db.commit()
     except Exception as err:

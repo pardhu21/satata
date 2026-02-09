@@ -238,3 +238,30 @@ def user_stats_by_user_id_activity_type_category(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal Server Error",
         ) from err
+    
+def update_stats_on_activity_delete(activity, db: Session):
+    try:
+        stats = user_stats_by_user_id_activity_type_category(
+            user_id=activity.user_id,
+            activity_type_id=activity.activity_type_id,
+            category_id=activity.category_id,
+            db=db,
+        )
+        if not stats:
+            core_logger.print_to_log(
+                f"No stats found for user {activity.user_id}, "
+                f"activity type {activity.activity_type_id}, "
+                f"category {activity.category_id}. Skipping stats update on activity delete."
+            )
+            return
+
+        # Here you would implement the logic to update the stats based on the deleted activity.
+        # This is a placeholder and should be replaced with actual update logic.
+        # For example, you might want to recalculate averages or decrement total_count.
+
+        db.commit()
+    except Exception as err:
+        db.rollback()
+        core_logger.print_to_log(
+            f"Error in update_stats_on_activity_delete: {err}", "error", exc=err
+        )
