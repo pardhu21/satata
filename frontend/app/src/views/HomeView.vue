@@ -258,14 +258,11 @@ async function fetchUserStars() {
 }
 
 async function fetchMoreActivities() {
-  // If the component is already loading or there are no more activities, return
   if (isLoading.value || !userHasMoreActivities.value) return
 
   try {
-    // Add 1 to the page number
     pageNumberUserActivities.value++
 
-    // Fetch the activities
     const newActivities = await activities.getUserActivitiesWithPagination(
       authStore.user.id,
       pageNumberUserActivities.value,
@@ -276,20 +273,19 @@ async function fetchMoreActivities() {
       if (!userActivities.value) {
         userActivities.value = []
       }
+      // Add activities immediately
       userActivities.value = [...userActivities.value, ...newActivities]
 
-      // Fetch media for each new activity
-      for (const activity of newActivities) {
+      // Fetch media in background (non-blocking)
+      newActivities.forEach(async (activity) => {
         activityMediaMap.value[activity.id] = await fetchActivityMedia(activity.id)
-      }
+      })
 
-      // Check if we've reached the end
       userHasMoreActivities.value = newActivities.length === numRecords
     } else {
       userHasMoreActivities.value = false
     }
   } catch (error) {
-    // Set the error message
     push.error(`${t('homeView.errorFetchingUserActivities')} - ${error}`)
   }
 }
@@ -387,7 +383,6 @@ function updateActivitiesOnDelete(activityId) {
 
 onMounted(async () => {
   if (route.query.activityFound === 'false') {
-    // Set the activityFound value to false and show the error alert.
     push.error(t('homeView.errorActivityNotFound'))
   }
 
@@ -399,38 +394,42 @@ onMounted(async () => {
   window.addEventListener('scroll', handleScroll)
 
   try {
-    // Fetch the user stats
-    fetchUserStars()
-
-    // Fetch the user activities and user activities number
+    // 1. FIRST: Fetch the user activities count and initial activities
     userNumberOfActivities.value = await activities.getUserNumberOfActivities()
 
-    // Fetch the initial user activities response (contains activities array and total_count)
     userActivities.value = await activities.getUserActivitiesWithPagination(
       authStore.user.id,
       pageNumberUserActivities.value,
       numRecords
     )
 
-    // Fetch media for initial activities
+    // Show activities immediately, then fetch media in background
     if (userActivities.value?.length) {
-      for (const activity of userActivities.value) {
+      // Fetch media asynchronously without blocking
+      userActivities.value.forEach(async (activity) => {
         activityMediaMap.value[activity.id] = await fetchActivityMedia(activity.id)
-      }
+      })
     }
 
-    followedUserActivities.value = await activities.getUserFollowersActivitiesWithPagination(
-      authStore.user.id,
-      pageNumberUserActivities.value,
-      numRecords
-    )
+    // Fetch followed user activities (non-blocking)
+    activities
+      .getUserFollowersActivitiesWithPagination(
+        authStore.user.id,
+        pageNumberUserActivities.value,
+        numRecords
+      )
+      .then((result) => {
+        followedUserActivities.value = result
+      })
 
-    // If the number of activities is greater than the page number times the number of records, there are no more activities
+    // Check if there are more activities
     if (pageNumberUserActivities.value * numRecords >= userNumberOfActivities.value) {
       userHasMoreActivities.value = false
     }
+
+    // 2. THEN: Fetch the user stats (non-blocking)
+    fetchUserStars()
   } catch (error) {
-    // Set the error message
     push.error(`${t('homeView.errorFetchingUserActivities')} - ${error}`)
   }
 
