@@ -12,6 +12,7 @@ import users.users.schema as users_schema
 import users.users.utils as users_utils
 import users.users.models as users_models
 
+import users.user_category_rules.utils as user_category_rules_utils
 import health.health_weight.utils as health_weight_utils
 
 import server_settings.utils as server_settings_utils
@@ -256,6 +257,8 @@ def create_user(
         db.commit()
         db.refresh(db_user)
 
+        user_category_rules_utils.seed_user_category_rules_for_user(db, core_logger=None, user_id=db_user.id)
+
         # Return user
         return db_user
     except HTTPException:
@@ -350,6 +353,8 @@ def create_signup_user(
         db.add(db_user)
         db.commit()
         db.refresh(db_user)
+
+        user_category_rules_utils.seed_user_category_rules_for_user(db, core_logger=None, user_id=db_user.id)
 
         # Return user
         return db_user

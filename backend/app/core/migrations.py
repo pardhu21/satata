@@ -1,4 +1,5 @@
 import migrations.utils as migrations_utils
+import migrations_satata.utils as migrations_satata_utils
 
 import core.logger as core_logger
 
@@ -13,6 +14,7 @@ async def check_migrations():
         try:
             # Check migrations not executed
             await migrations_utils.check_migrations_not_executed(db)
+            await migrations_satata_utils.check_migrations_not_executed(db)
 
             core_logger.print_to_log_and_console("Migration check completed")
         except Exception as err:

@@ -45,7 +45,7 @@ async def startup_event():
     alembic_cfg = Config("alembic.ini")
     # Disable the logger configuration in Alembic to avoid conflicts with FastAPI
     alembic_cfg.attributes["configure_logger"] = False
-    command.upgrade(alembic_cfg, "head")
+    command.upgrade(alembic_cfg, "heads")
 
     # Migration check
     await core_migrations.check_migrations()

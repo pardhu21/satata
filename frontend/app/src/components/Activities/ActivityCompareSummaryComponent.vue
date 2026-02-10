@@ -270,12 +270,14 @@
         :compare="true"
       />
       <!-- activity time-->
-      <ActivityCompareMetricComponent
-        :label="$t('activitySummaryComponent.activityTime')"
-        :value="formatSecondsToMinutes(activity.total_elapsed_time)"
-        :comparedValue="formatSecondsToMinutes(comparedActivity.total_elapsed_time)"
-        :compare="true"
-      />
+      <div class="col border-start border-opacity-50">
+        <ActivityCompareMetricComponent
+          :label="$t('activitySummaryComponent.activityTime')"
+          :value="formatSecondsToMinutes(activity.total_elapsed_time)"
+          :comparedValue="formatSecondsToMinutes(comparedActivity.total_elapsed_time)"
+          :compare="true"
+        />
+      </div>
       <div class="col border-start border-opacity-50">
         <!-- elevation -->
         <ActivityCompareMetricComponent

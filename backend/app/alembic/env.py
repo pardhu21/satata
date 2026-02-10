@@ -17,6 +17,10 @@ import activities.activity_media.models
 import activities.activity_sets.models
 import activities.activity_streams.models
 import activities.activity_workout_steps.models
+import activities.activity_ai_insights.models
+import activities.activity_delta_records.models
+import activities.activity_categories.models
+import activities.activity_types.models
 import followers.models
 import gears.gear.models
 import gears.gear_components.models
@@ -25,6 +29,7 @@ import health.health_steps.models
 import health.health_targets.models
 import health.health_weight.models
 import migrations.models
+import migrations_satata.models
 import notifications.models
 import password_reset_tokens.models
 import sign_up_tokens.models
@@ -37,6 +42,8 @@ import users.users_default_gear.models
 import users.users_identity_providers.models
 import users.users_integrations.models
 import users.users_privacy_settings.models
+import users.user_category_rules.models
+import users.user_activity_stats.models
 
 # import Base and engine from database file
 from core.database import Base, engine
@@ -44,6 +51,17 @@ from core.database import Base, engine
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
+
+# Set version_locations if not already set
+if config.get_main_option("version_locations"):
+    # Already configured in alembic.ini
+    pass
+else:
+    # Programmatically set version locations
+    config.set_main_option(
+        "version_locations",
+        "alembic/versions custom_migrations/versions"
+    )
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.

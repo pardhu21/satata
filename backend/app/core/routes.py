@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, Security
 # Alphabetized router imports
 import activities.activity.router as activities_router
 import activities.activity.public_router as activities_public_router
+import activities.activity_ai_insights.router as activity_ai_insights_router
 import activities.activity_exercise_titles.router as activity_exercise_titles_router
 import activities.activity_exercise_titles.public_router as activity_exercise_titles_public_router
 import activities.activity_laps.router as activity_laps_router
@@ -15,6 +16,9 @@ import activities.activity_streams.public_router as activity_streams_public_rout
 import activities.activity_summaries.router as activity_summaries_router
 import activities.activity_workout_steps.router as activity_workout_steps_router
 import activities.activity_workout_steps.public_router as activity_workout_steps_public_router
+import activities.activity_categories.router as activity_categories_router
+import activities.activity_delta_records.router as activity_delta_records_router
+import activities.activity_types.router as activity_types_router
 import auth.router as auth_router
 import auth.identity_providers.router as identity_providers_router
 import auth.identity_providers.public_router as identity_providers_public_router
@@ -44,6 +48,8 @@ import users.users_identity_providers.router as user_identity_providers_router
 import users.users.public_router as users_public_router
 import users.users_default_gear.router as user_default_gear_router
 import websocket.router as websocket_router
+import users.user_activity_stats.router as user_activity_stats_router
+import users.user_category_rules.router as user_category_rules_router
 
 
 router = APIRouter()
@@ -53,6 +59,12 @@ router.include_router(
     activities_router.router,
     prefix=core_config.ROOT_PATH + "/activities",
     tags=["activities"],
+    dependencies=[Depends(auth_security.validate_access_token)],
+)
+router.include_router(
+    activity_ai_insights_router.router,
+    prefix=core_config.ROOT_PATH + "/activities_ai_insights",
+    tags=["activity_ai_insights"],
     dependencies=[Depends(auth_security.validate_access_token)],
 )
 router.include_router(
@@ -96,6 +108,24 @@ router.include_router(
     prefix=core_config.ROOT_PATH + "/activities_summaries",
     tags=["summaries"],
     dependencies=[Depends(auth_security.validate_access_token)],
+)
+router.include_router(
+    activity_categories_router.router,
+    prefix=core_config.ROOT_PATH + "/activities_categories",
+    tags=["activity_categories"],
+    dependencies=[Depends(auth_security.validate_access_token)],
+)
+router.include_router(
+    activity_types_router.router,
+    prefix=core_config.ROOT_PATH + "/activities_types",
+    tags=["activity_types"],
+    dependencies=[Depends(auth_security.validate_access_token)],
+)
+router.include_router(
+    activity_delta_records_router.router,
+    prefix=core_config.ROOT_PATH + "/activities_delta_records",
+    tags=["activity_delta_records"],
+    # dependencies=[Depends(auth_security.validate_access_token)],
 )
 router.include_router(
     auth_router.router,
@@ -238,6 +268,18 @@ router.include_router(
     users_router.router,
     prefix=core_config.ROOT_PATH + "/users",
     tags=["users"],
+    dependencies=[Depends(auth_security.validate_access_token)],
+)
+router.include_router(
+    user_activity_stats_router.router,
+    prefix=core_config.ROOT_PATH + "/user_activity_stats",
+    tags=["user_activity_stats"],
+    dependencies=[Depends(auth_security.validate_access_token)],
+)
+router.include_router(
+    user_category_rules_router.router,
+    prefix=core_config.ROOT_PATH + "/user_category_rules",
+    tags=["user_category_rules"],
     dependencies=[Depends(auth_security.validate_access_token)],
 )
 router.include_router(
