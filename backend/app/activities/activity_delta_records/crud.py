@@ -157,45 +157,41 @@ def delete_delta(record_id: int, db: Session):
         ) from err
 
 
-# def test(db: Session):
-#     activities = activity_crud.get_all_activities(db)
-#     sorted_activities = sorted(activities, key=lambda x: x.start_time)
+def create_deltas_for_all_activities(db: Session):
+    activities = activity_crud.get_all_activities(db)
+    sorted_activities = sorted(activities, key=lambda x: x.start_time)
 
-#     rules = user_category_rules_crud.get_all_rules(db)
-#     for activity in sorted_activities:
-#         category_id = delta_utils.classify_activity_by_rule_vectors(activity, rules)
-#         user_stats = user_activity_stats_crud.get_all_stats(db)
-#         if user_stats:
-#             user_stats = [
-#                 x for x in user_stats
-#                 if x.user_id == activity.user_id and
-#                 x.activity_type_id == activity.activity_type and
-#                 x.category_id == category_id
-#             ]
-#             user_stats = user_stats[0] if user_stats else None
-#         activity_delta = delta_utils.compute_activity_delta(
-#             category_id,
-#             user_stats,
-#             activity
-#         )
+    rules = user_category_rules_crud.get_all_rules(db)
+    for activity in sorted_activities:
+        category_id = delta_utils.classify_activity_by_rule_vectors(activity, rules)
+        user_stats = user_activity_stats_crud.get_all_stats(db)
+        if user_stats:
+            user_stats = [
+                x for x in user_stats
+                if x.user_id == activity.user_id and
+                x.activity_type_id == activity.activity_type and
+                x.category_id == category_id
+            ]
+            user_stats = user_stats[0] if user_stats else None
+        activity_delta = delta_utils.compute_activity_delta(
+            category_id,
+            user_stats,
+            activity
+        )
 
-#         print(activity_delta.__dict__)
+        create_delta(activity_delta, db)
 
-#         create_delta(activity_delta, db)
+        activity_stats = user_stats_utils.update_user_category_stats(
+            category_id,
+            user_stats,
+            activity
+        )
 
-#         activity_stats = user_stats_utils.update_user_category_stats(
-#             category_id,
-#             user_stats,
-#             activity
-#         )
+        user_activity_stats_crud.create_or_update_stats(activity_stats, db)
 
-#         user_activity_stats_crud.create_or_update_stats(activity_stats, db)
-#         print(activity_stats.avg_distance, activity.distance, activity_stats.category_id)
+    return sorted_activities
 
-
-#     return sorted_activities
-
-def test(db: Session):
+def create_ai_insights_for_all_activities(db: Session):
     records = get_all_delta_records(db)
 
     for record in records:
