@@ -9,7 +9,7 @@ from typing import Dict
 from users.user_category_rules.models import UserCategoryRules
 from users.users import models as users_models
 
-from activities.activity import utils as activity_utils
+from activities.activity.constants import ACTIVITY_ID_TO_NAME
 from activities.activity_types import utils as activity_types_utils
 from activities.activity_categories import utils as activity_category_utils
 
@@ -140,7 +140,7 @@ def seed_user_category_rules_for_user(
         )
 
     for type_id, display_name in sorted(
-        activity_utils.ACTIVITY_ID_TO_NAME.items(),
+        ACTIVITY_ID_TO_NAME.items(),
         key=lambda kv: kv[0],
     ):
         internal_name = activity_types_utils.normal_to_snake_case(

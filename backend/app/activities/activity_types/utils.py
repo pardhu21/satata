@@ -1,7 +1,7 @@
 import json
 from typing import Any, Dict, List, Optional
 
-import activities.activity.utils as activity_utils
+from activities.activity.constants import ACTIVITY_ID_TO_NAME
 import activities.activity_categories.utils as activity_category_utils
 
 
@@ -639,7 +639,7 @@ def build_activity_category_default_values() -> Dict[str, Dict[str, Dict[str, fl
     # Prepare canonical categories list (names only)
     categories = [name for _id, (name, _disp) in sorted(activity_category_utils.CANONICAL_ACTIVITY_CATEGORIES.items())]
 
-    for _id, display_name in sorted(activity_utils.ACTIVITY_ID_TO_NAME.items(), key=lambda kv: kv[0]):
+    for _id, display_name in sorted(ACTIVITY_ID_TO_NAME.items(), key=lambda kv: kv[0]):
         internal_name = normal_to_snake_case(display_name)
         params_for_activity = AI_INSIGHT_DEFAULT_PARAMS_BY_ACTIVITY.get(internal_name, [])
         group = _activity_group(internal_name)
@@ -681,7 +681,7 @@ def build_activity_types_seed_records() -> List[Dict[str, Any]]:
     records: List[Dict[str, Any]] = []
 
     # Preserve the numeric ID ordering from the source mapping for deterministic output
-    for _id, display_name in sorted(activity_utils.ACTIVITY_ID_TO_NAME.items(), key=lambda kv: kv[0]):
+    for _id, display_name in sorted(ACTIVITY_ID_TO_NAME.items(), key=lambda kv: kv[0]):
         internal_name = normal_to_snake_case(display_name)
         params = get_parameters_for_activity(display_name)
         records.append(

@@ -5,9 +5,9 @@ from datetime import timedelta, date
 from typing import List
 from activities.activity.models import Activity
 from activities.activity.utils import (
-    set_activity_name_based_on_activity_type,
-    ACTIVITY_NAME_TO_ID,
+    set_activity_name_based_on_activity_type
 )
+from activity.constants import ACTIVITY_NAME_TO_ID
 from activities.activity_summaries.schema import (
     WeeklySummaryResponse,
     MonthlySummaryResponse,

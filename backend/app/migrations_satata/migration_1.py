@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 
-import activities.activity.utils as activity_utils
+from activities.activity.constants import ACTIVITY_ID_TO_NAME
 import activities.activity_types.models as activity_types_models
 import activities.activity_types.crud as activity_types_crud
 import activities.activity_types.utils as activity_types_utils
@@ -81,7 +81,7 @@ def process_migration_1(db: Session):
         # Seed activity types (enhanced)
         # -----------------------------
         for type_id, display_name in sorted(
-            activity_utils.ACTIVITY_ID_TO_NAME.items(), key=lambda kv: kv[0]
+            ACTIVITY_ID_TO_NAME.items(), key=lambda kv: kv[0]
         ):
             try:
                 # Skip if an entry with this id already exists

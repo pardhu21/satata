@@ -22,9 +22,13 @@ import auth.password_hasher as auth_password_hasher
 import auth.token_manager as auth_token_manager
 import auth.security as auth_security
 import users.users.schema as user_schema
+import activities.activity.router as activity_router
+import activities.activity_ai_insights.router as activity_ai_insights_router
 
 # Variables and constants
 DEFAULT_ROUTER_MODULES = [
+    "activities.activity.router",
+    "activities.activity_ai_insights.router",
     "session.router",
     "health.health_sleep.router",
     "health.health_steps.router",

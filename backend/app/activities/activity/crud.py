@@ -4,6 +4,7 @@ from urllib.parse import unquote
 import activities.activity.models as activities_models
 import activities.activity.schema as activities_schema
 import activities.activity.utils as activities_utils
+from activities.activity.constants import ACTIVITY_ID_TO_NAME
 import activities.activity_ai_insights.utils as activity_ai_insights_utils
 
 import users.user_activity_stats.crud as user_stats_crud
@@ -396,7 +397,7 @@ def get_distinct_activity_types_for_user(user_id: int, db: Session):
 
         # Map type IDs to names, excluding None values
         return {
-            type_id: activities_utils.ACTIVITY_ID_TO_NAME.get(type_id, "Unknown")
+            type_id: ACTIVITY_ID_TO_NAME.get(type_id, "Unknown")
             for type_id, in type_ids
             if type_id is not None
         }

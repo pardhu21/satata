@@ -13,7 +13,7 @@ import users.user_category_rules.crud as user_category_rules_crud
 import users.user_activity_stats.crud as user_stats_crud
 
 from activities.activity_categories.utils import CANONICAL_ACTIVITY_CATEGORIES
-from activities.activity.utils import ACTIVITY_ID_TO_NAME
+from activities.activity.constants import ACTIVITY_ID_TO_NAME
 
 import activities.activity_delta_records.utils as delta_utils
 import core.config as core_config

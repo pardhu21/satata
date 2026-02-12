@@ -17,7 +17,7 @@ import activities.activity_delta_records.utils as delta_utils
 import activities.activity_ai_insights.crud as ai_insights_crud
 import activities.activity_ai_insights.schema as ai_insights_schema
 from activities.activity_categories.utils import CANONICAL_ACTIVITY_CATEGORIES
-from activities.activity.utils import ACTIVITY_ID_TO_NAME
+from activities.activity.constants import ACTIVITY_ID_TO_NAME
 
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
